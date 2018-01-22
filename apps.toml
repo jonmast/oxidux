@@ -1,0 +1,10 @@
+[general]
+proxy_port = 1234
+
+[[apps]]
+name = "foo"
+port = 80
+
+[[apps]]
+name = "bar"
+port = 9000
