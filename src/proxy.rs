@@ -13,11 +13,11 @@ use process_manager::ProcessManager;
 
 pub struct Proxy {
     client: Client<hyper::client::HttpConnector>,
-    process_manager: &ProcessManager,
+    process_manager: ProcessManager,
 }
 
 impl Proxy {
-    pub fn new(handle: Handle, process_manager: &ProcessManager) -> Self {
+    pub fn new(handle: Handle, process_manager: ProcessManager) -> Self {
         let client = Client::new(&handle);
 
         Proxy {

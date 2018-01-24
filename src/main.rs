@@ -31,10 +31,10 @@ fn main() {
     let port = config.general.proxy_port;
     let addr = format!("127.0.0.1:{}", port).parse().unwrap();
 
-    let process_manager = ProcessManager::new(config);
+    let process_manager = ProcessManager::new(&config);
     let server = Http::new()
         .serve_addr_handle(&addr, &server_handle, move || {
-            Ok(Proxy::new(client_handle.clone(), &process_manager))
+            Ok(Proxy::new(client_handle.clone(), process_manager.clone()))
         })
         .unwrap();
 

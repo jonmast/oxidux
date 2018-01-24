@@ -1,21 +1,22 @@
 use hyper::header::Host;
 
 use process::Process;
-use config;
+use config::Config;
 
+#[derive(Clone)]
 pub struct ProcessManager {
     processes: Vec<Process>,
 }
 
 impl ProcessManager {
-    pub fn new(config: Config) -> ProcessManager {
-        let config = config::read_config();
-        println!("Parsed config {:?}", config);
-        let test_process = Process::new("foo".to_string(), 80);
+    pub fn new(config: &Config) -> ProcessManager {
+        let processes = config
+            .apps
+            .iter()
+            .map(|process_config| Process::from_config(&process_config))
+            .collect();
 
-        ProcessManager {
-            processes: vec![test_process],
-        }
+        ProcessManager { processes }
     }
 
     pub fn find_process(&self, host: &Host) -> Option<&Process> {
@@ -29,6 +30,6 @@ impl ProcessManager {
         println!("Looking for app {}", app_name);
         self.processes
             .iter()
-            .find(|&&ref process| process.app_name == app_name)
+            .find(|&&ref process| process.app_name() == app_name)
     }
 }

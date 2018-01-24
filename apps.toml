@@ -4,7 +4,9 @@ proxy_port = 1234
 [[apps]]
 name = "foo"
 port = 80
+command = "echo 'this is foo app'"
 
 [[apps]]
 name = "bar"
 port = 9000
+command = "echo 'this is bar app'"

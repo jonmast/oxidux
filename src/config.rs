@@ -17,6 +17,7 @@ pub struct ProxyConfig {
 pub struct App {
     pub name: String,
     pub port: u16,
+    pub command: String,
 }
 
 pub fn read_config() -> Config {
