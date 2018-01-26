@@ -32,4 +32,10 @@ impl ProcessManager {
             .iter()
             .find(|&&ref process| process.app_name() == app_name)
     }
+
+    pub fn start_processes(&self) {
+        for process in &self.processes {
+            process.start()
+        }
+    }
 }

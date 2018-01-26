@@ -32,6 +32,8 @@ fn main() {
     let addr = format!("127.0.0.1:{}", port).parse().unwrap();
 
     let process_manager = ProcessManager::new(&config);
+    process_manager.start_processes();
+
     let server = Http::new()
         .serve_addr_handle(&addr, &server_handle, move || {
             Ok(Proxy::new(client_handle.clone(), process_manager.clone()))

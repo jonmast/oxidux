@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::process::{Child, Command};
 
 use hyper::Uri;
 use url::Url;
@@ -15,6 +16,7 @@ struct Inner {
     app_name: String,
     port: u16,
     command: String,
+    process: Option<Child>,
 }
 
 impl Process {
@@ -23,6 +25,7 @@ impl Process {
             app_name: app_config.name.clone(),
             port: app_config.port,
             command: app_config.command.clone(),
+            process: None,
         };
 
         Process {
@@ -48,7 +51,28 @@ impl Process {
         self.inner.borrow().app_name.clone()
     }
 
+    // TODO: use tokio_process to run commands
+    pub fn start(&self) {
+        let shell = "/bin/sh";
+        let child_process = Command::new(shell)
+            .arg("-c")
+            .env("PORT", self.port().to_string())
+            .arg(self.command())
+            .spawn()
+            .expect("Failed to start app process");
+
+        self.set_child(child_process);
+    }
+
     fn port(&self) -> u16 {
         self.inner.borrow().port
+    }
+
+    fn command(&self) -> String {
+        self.inner.borrow().command.clone()
+    }
+
+    fn set_child(&self, process: Child) {
+        self.inner.borrow_mut().process = Some(process);
     }
 }
