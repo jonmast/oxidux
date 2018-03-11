@@ -1,6 +1,8 @@
 extern crate futures;
 extern crate hyper;
 extern crate tokio_core;
+extern crate tokio_io;
+extern crate tokio_process;
 extern crate toml;
 extern crate url;
 
@@ -32,7 +34,7 @@ fn main() {
     let addr = format!("127.0.0.1:{}", port).parse().unwrap();
 
     let process_manager = ProcessManager::new(&config);
-    process_manager.start_processes();
+    process_manager.start_processes(&server_handle.clone());
 
     let server = Http::new()
         .serve_addr_handle(&addr, &server_handle, move || {

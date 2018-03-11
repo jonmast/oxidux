@@ -1,9 +1,14 @@
 use std::cell::RefCell;
+use std::io::BufReader;
 use std::rc::Rc;
-use std::process::{Child, Command};
+use std::process::{Command, Stdio};
 
+use tokio_io;
+use tokio_process::{Child, CommandExt};
+use futures::{Future, Stream};
 use hyper::Uri;
 use url::Url;
+use tokio_core::reactor::Handle;
 
 use config;
 
@@ -16,6 +21,7 @@ struct Inner {
     app_name: String,
     port: u16,
     command: String,
+    directory: String,
     process: Option<Child>,
 }
 
@@ -25,6 +31,7 @@ impl Process {
             app_name: app_config.name.clone(),
             port: app_config.port,
             command: app_config.command.clone(),
+            directory: app_config.directory.clone(),
             process: None,
         };
 
@@ -51,21 +58,52 @@ impl Process {
         self.inner.borrow().app_name.clone()
     }
 
-    // TODO: use tokio_process to run commands
-    pub fn start(&self) {
-        let shell = "/bin/sh";
-        let child_process = Command::new(shell)
-            .arg("-c")
-            .env("PORT", self.port().to_string())
-            .arg(self.command())
-            .spawn()
+    pub fn start(&self, handle: &Handle) {
+        let mut child_process = self.build_command()
+            .spawn_async(&handle.clone())
             .expect("Failed to start app process");
 
+        let stdout = child_process.stdout().take().unwrap();
+        let reader = BufReader::new(stdout);
+        let lines = tokio_io::io::lines(reader);
+        let app_name = self.app_name();
+        let printer = lines.for_each(move |line| {
+            println!("{}: {}", app_name, line);
+            Ok(())
+        });
+
+        handle.clone().spawn(printer.map_err(|_| ()));
         self.set_child(child_process);
+    }
+
+    fn build_command(&self) -> Command {
+        let full_command = format!(
+            "cd {directory}; {command}",
+            directory = self.directory(),
+            command = self.command(),
+        );
+        println!("Starting command {}", full_command);
+
+        let shell = "/bin/sh";
+
+        let mut cmd = Command::new(shell);
+
+        cmd.env("PORT", self.port().to_string())
+            .arg("-c")
+            .arg(full_command)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        cmd
     }
 
     fn port(&self) -> u16 {
         self.inner.borrow().port
+    }
+
+    fn directory(&self) -> String {
+        self.inner.borrow().directory.clone()
     }
 
     fn command(&self) -> String {

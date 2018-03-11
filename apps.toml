@@ -2,11 +2,19 @@
 proxy_port = 1234
 
 [[apps]]
-name = "foo"
-port = 80
-command = "echo $USER && echo $PORT"
-
-[[apps]]
+directory = "~"
 name = "bar"
 port = 9000
-command = "/usr/bin/echo this is bar app"
+command = "echo hello there"
+
+[[apps]]
+directory = "~"
+name = "foo"
+port = 80
+command = "sleep 10 && echo $USER && echo $PORT"
+
+[[apps]]
+directory = "~/dev/kingandpartners/vanilla-client"
+name = "vanilla"
+port = 9124
+command = "bin/rails s -p $PORT"
