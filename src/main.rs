@@ -23,6 +23,7 @@ mod process;
 mod process_manager;
 use process_manager::ProcessManager;
 mod config;
+mod output;
 
 fn main() {
     let mut core = Core::new().unwrap();
@@ -31,6 +32,7 @@ fn main() {
 
     let config = config::read_config();
     let port = config.general.proxy_port;
+    println!("Starting proxy on port: {}", port);
     let addr = format!("127.0.0.1:{}", port).parse().unwrap();
 
     let process_manager = ProcessManager::new(&config);

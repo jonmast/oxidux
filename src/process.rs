@@ -1,16 +1,14 @@
 use std::cell::RefCell;
-use std::io::BufReader;
-use std::rc::Rc;
 use std::process::{Command, Stdio};
+use std::rc::Rc;
 
-use tokio_io;
-use tokio_process::{Child, CommandExt};
-use futures::{Future, Stream};
 use hyper::Uri;
-use url::Url;
 use tokio_core::reactor::Handle;
+use tokio_process::{Child, CommandExt};
+use url::Url;
 
 use config;
+use output::Output;
 
 #[derive(Clone)]
 pub struct Process {
@@ -64,15 +62,10 @@ impl Process {
             .expect("Failed to start app process");
 
         let stdout = child_process.stdout().take().unwrap();
-        let reader = BufReader::new(stdout);
-        let lines = tokio_io::io::lines(reader);
         let app_name = self.app_name();
-        let printer = lines.for_each(move |line| {
-            println!("{}: {}", app_name, line);
-            Ok(())
-        });
+        let output = Output::new(app_name, stdout);
 
-        handle.clone().spawn(printer.map_err(|_| ()));
+        output.setup_writer(&handle);
         self.set_child(child_process);
     }
 
