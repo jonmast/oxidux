@@ -1,8 +1,8 @@
 use hyper::header::Host;
 
-use tokio_core::reactor::Handle;
-use process::Process;
 use config::Config;
+use process::Process;
+use tokio_core::reactor::Handle;
 
 #[derive(Clone)]
 pub struct ProcessManager {

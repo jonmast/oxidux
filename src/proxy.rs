@@ -1,13 +1,13 @@
-use hyper;
 use futures;
+use hyper;
 
 use tokio_core::reactor::Handle;
 
 use futures::future::Future;
 
-use hyper::Client;
 use hyper::header::{ContentLength, Host};
 use hyper::server::{Request, Response, Service};
+use hyper::Client;
 
 use process_manager::ProcessManager;
 
