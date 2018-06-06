@@ -1,5 +1,6 @@
 extern crate futures;
 extern crate hyper;
+extern crate tokio;
 extern crate tokio_core;
 extern crate tokio_io;
 extern crate tokio_process;
@@ -11,15 +12,12 @@ extern crate serde_derive;
 
 use std::net::SocketAddr;
 
-use futures::future::Future;
-use futures::Stream;
+use futures::future::{self, Future};
 
-use tokio_core::reactor::{Core, Handle};
-
-use hyper::server::Http;
+use hyper::service::service_fn;
+use hyper::{Client, Server};
 
 mod proxy;
-use proxy::Proxy;
 
 mod process;
 mod process_manager;
@@ -29,38 +27,27 @@ use config::Config;
 mod output;
 
 pub fn run_server(config: Config) {
-    let mut core = Core::new().unwrap();
-    let client_handle = core.handle();
+    hyper::rt::run(future::lazy(move || {
+        let process_manager = start_process_manager(&config);
 
-    let process_manager = start_process_manager(&config, &core.handle());
+        let client = Client::new();
 
-    let server = Http::new()
-        .serve_addr_handle(&build_address(&config), &core.handle(), move || {
-            Ok(Proxy::new(client_handle.clone(), process_manager.clone()))
-        })
-        .unwrap();
+        let proxy = move || {
+            let client = client.clone();
+            let process_manager = process_manager.clone();
 
-    let server_handle = core.handle();
-    let spawn_handle = server_handle.clone();
+            service_fn(move |req| proxy::handle_request(req, &client, &process_manager))
+        };
 
-    server_handle.spawn(
-        server
-            .for_each(move |conn| {
-                spawn_handle.spawn(
-                    conn.map(|_| ())
-                        .map_err(|err| println!("serve error: {:?}", err)),
-                );
-                Ok(())
-            })
-            .map_err(|_| ()),
-    );
-
-    core.run(futures::future::empty::<(), ()>()).unwrap();
+        Server::bind(&build_address(&config))
+            .serve(proxy)
+            .map_err(|err| println!("serve error: {:?}", err))
+    }));
 }
 
-fn start_process_manager(config: &Config, handle: &Handle) -> ProcessManager {
+fn start_process_manager(config: &Config) -> ProcessManager {
     let process_manager = ProcessManager::new(&config);
-    process_manager.start_processes(handle);
+    process_manager.start_processes();
 
     process_manager
 }

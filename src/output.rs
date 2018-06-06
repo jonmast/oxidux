@@ -1,7 +1,7 @@
 use std::io::BufReader;
 
 use futures::{Future, Stream};
-use tokio_core::reactor::Handle;
+use tokio;
 use tokio_io::io;
 use tokio_process::ChildStdout;
 
@@ -17,7 +17,7 @@ impl Output {
         Output { name, stream }
     }
 
-    pub fn setup_writer(self, handle: &Handle) {
+    pub fn setup_writer(self) {
         let name = self.name.clone();
         let printer = self.stream.for_each(move |line| {
             println!("{}: {}", name, line);
@@ -26,6 +26,6 @@ impl Output {
 
         let mapped = printer.map_err(|_| ());
 
-        handle.clone().spawn(mapped);
+        tokio::spawn(mapped);
     }
 }

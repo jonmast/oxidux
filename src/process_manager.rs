@@ -1,8 +1,5 @@
-use hyper::header::Host;
-
 use config::Config;
 use process::Process;
-use tokio_core::reactor::Handle;
 
 #[derive(Clone)]
 pub struct ProcessManager {
@@ -20,9 +17,7 @@ impl ProcessManager {
         ProcessManager { processes }
     }
 
-    pub fn find_process(&self, host: &Host) -> Option<&Process> {
-        let hostname = host.hostname();
-
+    pub fn find_process(&self, hostname: &str) -> Option<&Process> {
         let app_name = match hostname.find(".") {
             Some(tld_start) => &hostname[0..tld_start],
             None => hostname,
@@ -34,9 +29,9 @@ impl ProcessManager {
             .find(|&&ref process| process.app_name() == app_name)
     }
 
-    pub fn start_processes(&self, handle: &Handle) {
+    pub fn start_processes(&self) {
         for process in &self.processes {
-            process.start(&handle)
+            process.start()
         }
     }
 }

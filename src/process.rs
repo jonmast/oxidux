@@ -1,10 +1,12 @@
-use std::cell::RefCell;
 use std::process::{Command, Stdio};
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::MutexGuard;
 
+use futures::Future;
 use hyper::Uri;
-use tokio_core::reactor::Handle;
-use tokio_process::{Child, CommandExt};
+use tokio;
+use tokio_process::CommandExt;
 use url::Url;
 
 use config;
@@ -12,7 +14,7 @@ use output::Output;
 
 #[derive(Clone)]
 pub struct Process {
-    inner: Rc<RefCell<Inner>>,
+    inner: Arc<Mutex<Inner>>,
 }
 
 struct Inner {
@@ -20,7 +22,6 @@ struct Inner {
     port: u16,
     command: String,
     directory: String,
-    process: Option<Child>,
 }
 
 impl Process {
@@ -30,11 +31,10 @@ impl Process {
             port: app_config.port,
             command: app_config.command.clone(),
             directory: app_config.directory.clone(),
-            process: None,
         };
 
         Process {
-            inner: Rc::new(RefCell::new(data)),
+            inner: Arc::new(Mutex::new(data)),
         }
     }
 
@@ -42,7 +42,7 @@ impl Process {
         let base_url = Url::parse("http://localhost/").unwrap();
 
         let mut destination_url = base_url
-            .join(request_path.as_ref())
+            .join(request_path.path_and_query().unwrap().as_str())
             .expect("Invalid request URL");
 
         destination_url.set_port(Some(self.port())).unwrap();
@@ -52,21 +52,30 @@ impl Process {
         destination_url.as_str().parse().unwrap()
     }
 
-    pub fn app_name(&self) -> String {
-        self.inner.borrow().app_name.clone()
+    fn inner(&self) -> MutexGuard<Inner> {
+        self.inner.lock().unwrap()
     }
 
-    pub fn start(&self, handle: &Handle) {
-        let mut child_process = self.build_command()
-            .spawn_async(&handle.clone())
+    pub fn app_name(&self) -> String {
+        self.inner().app_name.clone()
+    }
+
+    pub fn start(&self) {
+        let mut child_process = self
+            .build_command()
+            .spawn_async()
             .expect("Failed to start app process");
 
         let stdout = child_process.stdout().take().unwrap();
         let app_name = self.app_name();
-        let output = Output::new(app_name, stdout);
+        let output = Output::new(app_name.clone(), stdout);
 
-        output.setup_writer(&handle);
-        self.set_child(child_process);
+        let child_future = child_process
+            .map(move |status| println!("Process {} exited with {}", app_name, status))
+            .map_err(|e| panic!("failed to wait for exit: {}", e));
+
+        output.setup_writer();
+        tokio::spawn(child_future);
     }
 
     fn build_command(&self) -> Command {
@@ -92,18 +101,14 @@ impl Process {
     }
 
     fn port(&self) -> u16 {
-        self.inner.borrow().port
+        self.inner().port
     }
 
     fn directory(&self) -> String {
-        self.inner.borrow().directory.clone()
+        self.inner().directory.clone()
     }
 
     fn command(&self) -> String {
-        self.inner.borrow().command.clone()
-    }
-
-    fn set_child(&self, process: Child) {
-        self.inner.borrow_mut().process = Some(process);
+        self.inner().command.clone()
     }
 }
