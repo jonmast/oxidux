@@ -75,6 +75,7 @@ impl Process {
             .map_err(|e| panic!("failed to wait for exit: {}", e));
 
         output.setup_writer();
+
         tokio::spawn(child_future);
     }
 

@@ -4,6 +4,7 @@ extern crate tokio;
 extern crate tokio_core;
 extern crate tokio_io;
 extern crate tokio_process;
+extern crate tokio_uds;
 extern crate toml;
 extern crate url;
 
@@ -24,10 +25,13 @@ mod process_manager;
 use process_manager::ProcessManager;
 pub mod config;
 use config::Config;
+mod ipc_listener;
 mod output;
 
 pub fn run_server(config: Config) {
     hyper::rt::run(future::lazy(move || {
+        ipc_listener::start_ipc_sock();
+
         let process_manager = start_process_manager(&config);
 
         let client = Client::new();
@@ -70,7 +74,8 @@ mod tests {
 
         let addr = build_address(&config);
 
-        assert_eq!(addr.pirt(), 80);
-        assert_eq!(addr.ip(), "127.0.0.1");
+        assert_eq!(addr.port(), 80);
+        let localhost: std::net::IpAddr = "127.0.0.1".parse().unwrap();
+        assert_eq!(addr.ip(), localhost);
     }
 }
