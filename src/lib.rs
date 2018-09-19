@@ -1,5 +1,7 @@
 extern crate futures;
 extern crate hyper;
+extern crate nix;
+extern crate serde_json;
 extern crate tokio;
 extern crate tokio_core;
 extern crate tokio_io;
@@ -30,9 +32,9 @@ mod output;
 
 pub fn run_server(config: Config) {
     hyper::rt::run(future::lazy(move || {
-        ipc_listener::start_ipc_sock();
-
         let process_manager = start_process_manager(&config);
+
+        ipc_listener::start_ipc_sock(process_manager.clone());
 
         let client = Client::new();
 

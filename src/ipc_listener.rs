@@ -1,12 +1,20 @@
 use config;
 use futures::future::Future;
 use futures::Stream;
+use process_manager::ProcessManager;
+use serde_json;
 use std::fs;
 use std::str;
 use tokio;
 use tokio_uds::UnixListener;
 
-pub fn start_ipc_sock() {
+#[derive(Deserialize, Debug)]
+struct IPCCommand {
+    command: String,
+    args: Vec<String>,
+}
+
+pub fn start_ipc_sock(process_manager: ProcessManager) {
     let path = config::config_dir().join("oxidux.sock");
     fs::remove_file(&path).ok();
 
@@ -14,12 +22,13 @@ pub fn start_ipc_sock() {
 
     let listener = sock
         .incoming()
-        .for_each(|connection| {
+        .for_each(move |connection| {
+            let connection_pm = process_manager.clone();
             let buf = vec![];
             let reader = tokio::io::read_to_end(connection, buf)
                 .and_then(|(_, buf)| {
-                    let txt = str::from_utf8(&buf);
-                    println!("Got {:?}", txt);
+                    parse_incoming_command(buf, connection_pm);
+
                     Ok(())
                 })
                 .map_err(|err| println!("Couldn't read message, got error: {}", err));
@@ -31,4 +40,30 @@ pub fn start_ipc_sock() {
         .map_err(|err| eprintln!("Failed to open socket, got error {:?}", err));
 
     tokio::spawn(listener);
+}
+
+fn parse_incoming_command(buf: Vec<u8>, process_manager: ProcessManager) {
+    let txt = str::from_utf8(&buf);
+
+    if let Ok(raw_json) = txt {
+        let command: IPCCommand =
+            serde_json::from_str(raw_json).expect("Failed to parse, is it a valid JSON command?");
+
+        println!("Command obj {:?}", command);
+
+        run_command(command, process_manager);
+    }
+}
+
+fn run_command(command: IPCCommand, process_manager: ProcessManager) {
+    match command.command.as_ref() {
+        "restart" => {
+            println!("Restarting {}", command.args[0]);
+            process_manager
+                .find_process(&command.args[0])
+                .expect("Failed to find app to restart")
+                .restart();
+        }
+        cmd_str => println!("Unknown command {}", cmd_str),
+    }
 }
