@@ -1,13 +1,12 @@
+use std::io;
+use std::os::unix::process::CommandExt as StdCommandExt;
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
-use std::thread;
-use std::time;
 
 use nix::sys::signal::{self, Signal};
-use nix::sys::wait;
-use nix::unistd::Pid;
+use nix::unistd::{self, Pid};
 
 use futures::Future;
 use hyper::Uri;
@@ -22,9 +21,6 @@ use output::Output;
 pub struct Process {
     inner: Arc<Mutex<Inner>>,
 }
-
-const TERM_TIMEOUT: time::Duration = time::Duration::from_secs(5);
-const KILL_TIMEOUT: time::Duration = time::Duration::from_secs(10);
 
 struct Inner {
     app_name: String,
@@ -100,11 +96,16 @@ impl Process {
     pub fn restart(&self) {
         println!("restarting");
         self.stop();
-        self.set_restart_pending(true)
+
+        self.set_restart_pending(true);
+
+        if !self.is_running() {
+            self.start();
+        }
     }
 
     fn process_died(&self, status: ExitStatus) {
-        println!("Process {} exited with status {}", self.app_name(), status);
+        println!("Process {} exited with {}", self.app_name(), status);
 
         self.set_stopped();
 
@@ -137,37 +138,13 @@ impl Process {
         inner.restart_pending = state
     }
 
-    fn wait_to_die(&self) {
-        if let Some(pid) = self.pid() {
-            println!("calling waitpid");
-            let result = wait::waitpid(pid, None);
-
-            match result {
-                Ok(_) => self.set_stopped(),
-                _ => (),
-            }
-
-            println!("Got result {:?}", result);
-        }
-    }
-
-    fn kill(&self) {
-        println!("Got tired of waiting for process to die, force killing it");
-
-        match self.send_signal(Signal::SIGKILL) {
-            Ok(_) => {
-                println!("Sending SIGKILL");
-                self.wait_to_die();
-            }
-            Err(msg) => println!("{}", msg),
-        }
-    }
-
     fn send_signal(&self, signal: Signal) -> Result<(), &str> {
         let pid = self.pid().ok_or("Pid is empty")?;
 
-        println!("Sending {:?} to {}", signal, pid);
-        signal::kill(pid, signal).map_err(|_| "Failed to signal pid")
+        let group_pid = unistd::getpgid(Some(pid)).map_err(|_| "Couldn't find group for PID")?;
+
+        println!("Sending {:?} to process group {}", signal, group_pid);
+        signal::kill(negate_pid(group_pid), signal).map_err(|_| "Failed to signal pid")
     }
 
     fn build_command(&self) -> Command {
@@ -185,6 +162,7 @@ impl Process {
         cmd.env("PORT", self.port().to_string())
             .arg("-c")
             .arg(full_command)
+            .before_exec(set_process_group)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -218,5 +196,30 @@ impl Process {
     fn set_stopped(&self) {
         let mut inner = self.inner();
         inner.pid = None;
+    }
+}
+
+fn set_process_group() -> Result<(), io::Error> {
+    let pid = unistd::getpid();
+    unistd::setpgid(pid, pid).map_err(|nix_error| io::Error::new(io::ErrorKind::Other, nix_error))
+}
+
+fn negate_pid(pid: Pid) -> Pid {
+    let pid_id: i32 = pid.into();
+
+    Pid::from_raw(-pid_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_function_name() {
+        let pid = Pid::from_raw(1);
+
+        let negated_pid = negate_pid(pid);
+
+        assert_eq!(negated_pid, Pid::from_raw(-1));
     }
 }
