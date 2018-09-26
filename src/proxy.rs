@@ -1,7 +1,6 @@
 use futures;
-use hyper;
-
 use futures::future::Future;
+use hyper;
 
 use hyper::client::HttpConnector;
 use hyper::Client;
@@ -9,16 +8,16 @@ use hyper::{Body, Request, Response};
 
 use process_manager::ProcessManager;
 
-const ERROR_MESSAGE: &'static str = "No response from server";
+const ERROR_MESSAGE: &str = "No response from server";
 
-fn error_response(error: hyper::Error) -> Response<Body> {
+fn error_response(error: &hyper::Error) -> Response<Body> {
     println!("Request to backend failed with error \"{}\"", error);
 
     let body = Body::from(ERROR_MESSAGE);
     Response::new(body)
 }
 
-const MISSING_HOST_MESSAGE: &'static str = "No such host was found";
+const MISSING_HOST_MESSAGE: &str = "No such host was found";
 fn missing_host_response() -> Response<Body> {
     let body = Body::from(MISSING_HOST_MESSAGE);
 
@@ -26,7 +25,7 @@ fn missing_host_response() -> Response<Body> {
 }
 
 pub fn handle_request(
-    request: Request<Body>,
+    request: &Request<Body>,
     client: &Client<HttpConnector>,
     process_manager: &ProcessManager,
 ) -> Box<Future<Item = Response<Body>, Error = hyper::Error> + Send> {
@@ -46,6 +45,6 @@ pub fn handle_request(
 
             futures::future::ok(Response::from_parts(parts, body))
         }
-        Err(e) => futures::future::ok(error_response(e)),
+        Err(e) => futures::future::ok(error_response(&e)),
     }))
 }

@@ -1,8 +1,9 @@
-use std::env;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::PathBuf;
+
 use toml;
+use dirs;
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -34,7 +35,7 @@ pub fn read_config(file_name: &str) -> Config {
 }
 
 pub fn config_dir() -> PathBuf {
-    let home_dir = env::home_dir().expect("Couldn't determine home directory");
+    let home_dir = dirs::home_dir().expect("Couldn't determine home directory");
 
     home_dir.join(".oxidux")
 }

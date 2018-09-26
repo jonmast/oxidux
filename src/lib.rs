@@ -9,6 +9,7 @@ extern crate tokio_process;
 extern crate tokio_uds;
 extern crate toml;
 extern crate url;
+extern crate dirs;
 
 #[macro_use]
 extern crate serde_derive;
@@ -42,7 +43,7 @@ pub fn run_server(config: Config) {
             let client = client.clone();
             let process_manager = process_manager.clone();
 
-            service_fn(move |req| proxy::handle_request(req, &client, &process_manager))
+            service_fn(move |req| proxy::handle_request(&req, &client, &process_manager))
         };
 
         Server::bind(&build_address(&config))

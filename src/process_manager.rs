@@ -18,7 +18,7 @@ impl ProcessManager {
     }
 
     pub fn find_process(&self, hostname: &str) -> Option<&Process> {
-        let app_name = match hostname.find(".") {
+        let app_name = match hostname.find('.') {
             Some(tld_start) => &hostname[0..tld_start],
             None => hostname,
         };
@@ -26,7 +26,7 @@ impl ProcessManager {
         println!("Looking for app {}", app_name);
         self.processes
             .iter()
-            .find(|&&ref process| process.app_name() == app_name)
+            .find(|ref process| process.app_name() == app_name)
     }
 
     pub fn start_processes(&self) {

@@ -26,23 +26,21 @@ pub fn start_ipc_sock(process_manager: ProcessManager) {
             let connection_pm = process_manager.clone();
             let buf = vec![];
             let reader = tokio::io::read_to_end(connection, buf)
-                .and_then(|(_, buf)| {
-                    parse_incoming_command(buf, connection_pm);
+                .and_then(move |(_, buf)| {
+                    parse_incoming_command(&buf, &connection_pm);
 
                     Ok(())
-                })
-                .map_err(|err| println!("Couldn't read message, got error: {}", err));
+                }).map_err(|err| println!("Couldn't read message, got error: {}", err));
 
             tokio::spawn(reader);
 
             Ok(())
-        })
-        .map_err(|err| eprintln!("Failed to open socket, got error {:?}", err));
+        }).map_err(|err| eprintln!("Failed to open socket, got error {:?}", err));
 
     tokio::spawn(listener);
 }
 
-fn parse_incoming_command(buf: Vec<u8>, process_manager: ProcessManager) {
+fn parse_incoming_command(buf: &[u8], process_manager: &ProcessManager) {
     let txt = str::from_utf8(&buf);
 
     if let Ok(raw_json) = txt {
@@ -51,11 +49,11 @@ fn parse_incoming_command(buf: Vec<u8>, process_manager: ProcessManager) {
 
         println!("Command obj {:?}", command);
 
-        run_command(command, process_manager);
+        run_command(&command, process_manager);
     }
 }
 
-fn run_command(command: IPCCommand, process_manager: ProcessManager) {
+fn run_command(command: &IPCCommand, process_manager: &ProcessManager) {
     match command.command.as_ref() {
         "restart" => {
             println!("Restarting {}", command.args[0]);

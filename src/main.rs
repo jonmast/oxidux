@@ -16,8 +16,7 @@ fn main() {
                         .help("App config file")
                         .default_value("apps.toml"),
                 ),
-        )
-        .setting(AppSettings::SubcommandRequiredElseHelp)
+        ).setting(AppSettings::SubcommandRequiredElseHelp)
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("server") {
