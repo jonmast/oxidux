@@ -1,9 +1,5 @@
-use std::io;
-use std::os::unix::process::CommandExt as StdCommandExt;
 use std::process::{Command, ExitStatus, Stdio};
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::MutexGuard;
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use nix::sys::signal::{self, Signal};
 use nix::unistd::{self, Pid};
@@ -11,7 +7,7 @@ use nix::unistd::{self, Pid};
 use futures::Future;
 use hyper::Uri;
 use tokio;
-use tokio_process::CommandExt;
+use tokio_pty_process::{self, CommandExt};
 use url::Url;
 
 use config;
@@ -71,14 +67,17 @@ impl Process {
 
     pub fn start(&self) {
         self.set_restart_pending(false);
-        let mut child_process = self
+        let pty_master =
+            tokio_pty_process::AsyncPtyMaster::open().expect("Failed to open PTY master");
+
+        let child_process = self
             .build_command()
-            .spawn_async()
+            .spawn_pty_async(&pty_master)
             .expect("Failed to start app process");
 
-        let stdout = child_process.stdout().take().unwrap();
         let app_name = self.app_name();
-        let output = Output::new(app_name.clone(), stdout);
+        let output = Output::new(app_name.clone(), pty_master);
+        output.setup_writer();
 
         self.set_pid(child_process.id());
 
@@ -87,8 +86,6 @@ impl Process {
         let child_future = child_process
             .map(move |status| listener.process_died(status))
             .map_err(|e| panic!("failed to wait for exit: {}", e));
-
-        output.setup_writer();
 
         tokio::spawn(child_future);
     }
@@ -162,7 +159,6 @@ impl Process {
         cmd.env("PORT", self.port().to_string())
             .arg("-c")
             .arg(full_command)
-            .before_exec(set_process_group)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -197,11 +193,6 @@ impl Process {
         let mut inner = self.inner();
         inner.pid = None;
     }
-}
-
-fn set_process_group() -> Result<(), io::Error> {
-    let pid = unistd::getpid();
-    unistd::setpgid(pid, pid).map_err(|nix_error| io::Error::new(io::ErrorKind::Other, nix_error))
 }
 
 fn negate_pid(pid: Pid) -> Pid {

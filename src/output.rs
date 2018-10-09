@@ -1,19 +1,18 @@
-use std::io::BufReader;
-
 use futures::{Future, Stream};
 use tokio;
-use tokio_io::io;
-use tokio_process::ChildStdout;
+use tokio_codec::{Framed, LinesCodec};
+use tokio_pty_process;
 
+type OutputStream = Framed<tokio_pty_process::AsyncPtyMaster, LinesCodec>;
 pub struct Output {
     name: String,
-    stream: io::Lines<BufReader<ChildStdout>>,
+    stream: OutputStream,
 }
 
 impl Output {
-    pub fn new(name: String, stdout: ChildStdout) -> Self {
-        let reader = BufReader::new(stdout);
-        let stream = io::lines(reader);
+    pub fn new(name: String, pty: tokio_pty_process::AsyncPtyMaster) -> Self {
+        let stream = Framed::new(pty, LinesCodec::new());
+
         Output { name, stream }
     }
 
