@@ -12,6 +12,7 @@ extern crate tokio_codec;
 extern crate toml;
 extern crate url;
 extern crate dirs;
+extern crate ansi_term;
 
 #[macro_use]
 extern crate serde_derive;

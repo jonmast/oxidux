@@ -76,8 +76,7 @@ impl Process {
             .expect("Failed to start app process");
 
         let app_name = self.app_name();
-        let output = Output::new(app_name.clone(), pty_master);
-        output.setup_writer();
+        Output::for_pty(pty_master, app_name.clone(), self.port());
 
         self.set_pid(child_process.id());
 
