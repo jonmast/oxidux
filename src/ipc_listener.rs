@@ -1,4 +1,6 @@
 use config;
+use ipc_command::IPCCommand;
+
 use futures::future::Future;
 use futures::Stream;
 use process_manager::ProcessManager;
@@ -8,14 +10,8 @@ use std::str;
 use tokio;
 use tokio_uds::UnixListener;
 
-#[derive(Deserialize, Debug)]
-struct IPCCommand {
-    command: String,
-    args: Vec<String>,
-}
-
 pub fn start_ipc_sock(process_manager: ProcessManager) {
-    let path = config::config_dir().join("oxidux.sock");
+    let path = config::socket_path();
     fs::remove_file(&path).ok();
 
     let sock = UnixListener::bind(&path).expect("Failed to open socket");

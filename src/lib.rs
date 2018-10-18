@@ -31,8 +31,10 @@ mod process_manager;
 use process_manager::ProcessManager;
 pub mod config;
 use config::Config;
+pub mod ipc_command;
 mod ipc_listener;
 mod output;
+pub mod client;
 
 pub fn run_server(config: Config) {
     hyper::rt::run(future::lazy(move || {

@@ -2,8 +2,8 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::PathBuf;
 
-use toml;
 use dirs;
+use toml;
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -38,4 +38,8 @@ pub fn config_dir() -> PathBuf {
     let home_dir = dirs::home_dir().expect("Couldn't determine home directory");
 
     home_dir.join(".oxidux")
+}
+
+pub fn socket_path() -> PathBuf {
+    config_dir().join("oxidux.sock")
 }
