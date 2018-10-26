@@ -26,7 +26,7 @@ pub fn start_ipc_sock(process_manager: ProcessManager) {
                     parse_incoming_command(&buf, &connection_pm);
 
                     Ok(())
-                }).map_err(|err| println!("Couldn't read message, got error: {}", err));
+                }).map_err(|err| eprintln!("Couldn't read message, got error: {}", err));
 
             tokio::spawn(reader);
 
@@ -43,8 +43,6 @@ fn parse_incoming_command(buf: &[u8], process_manager: &ProcessManager) {
         let command: IPCCommand =
             serde_json::from_str(raw_json).expect("Failed to parse, is it a valid JSON command?");
 
-        println!("Command obj {:?}", command);
-
         run_command(&command, process_manager);
     }
 }
@@ -52,12 +50,12 @@ fn parse_incoming_command(buf: &[u8], process_manager: &ProcessManager) {
 fn run_command(command: &IPCCommand, process_manager: &ProcessManager) {
     match command.command.as_ref() {
         "restart" => {
-            println!("Restarting {}", command.args[0]);
+            eprintln!("Restarting {}", command.args[0]);
             process_manager
                 .find_process(&command.args[0])
                 .expect("Failed to find app to restart")
                 .restart();
         }
-        cmd_str => println!("Unknown command {}", cmd_str),
+        cmd_str => eprintln!("Unknown command {}", cmd_str),
     }
 }

@@ -53,7 +53,7 @@ pub fn run_server(config: Config) {
 
         Server::bind(&build_address(&config))
             .serve(proxy)
-            .map_err(|err| println!("serve error: {:?}", err))
+            .map_err(|err| eprintln!("serve error: {:?}", err))
     }));
 }
 

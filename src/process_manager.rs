@@ -23,7 +23,7 @@ impl ProcessManager {
             None => hostname,
         };
 
-        println!("Looking for app {}", app_name);
+        eprintln!("Looking for app {}", app_name);
         self.processes
             .iter()
             .find(|ref process| process.app_name() == app_name)

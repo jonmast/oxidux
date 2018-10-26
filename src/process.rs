@@ -52,7 +52,7 @@ impl Process {
 
         destination_url.set_port(Some(self.port())).unwrap();
 
-        println!("Starting request to backend {}", destination_url);
+        eprintln!("Starting request to backend {}", destination_url);
 
         destination_url.as_str().parse().unwrap()
     }
@@ -90,7 +90,7 @@ impl Process {
     }
 
     pub fn restart(&self) {
-        println!("restarting");
+        eprintln!("restarting");
         self.stop();
 
         self.set_restart_pending(true);
@@ -101,7 +101,7 @@ impl Process {
     }
 
     fn process_died(&self, status: ExitStatus) {
-        println!("Process {} exited with {}", self.app_name(), status);
+        eprintln!("Process {} exited with {}", self.app_name(), status);
 
         self.set_stopped();
 
@@ -111,13 +111,13 @@ impl Process {
     }
 
     pub fn stop(&self) {
-        println!("Stopping process {}", self.app_name());
+        eprintln!("Stopping process {}", self.app_name());
 
         match self.send_signal(Signal::SIGINT) {
             Ok(_) => {
-                println!("Successfully sent stop signal");
+                eprintln!("Successfully sent stop signal");
             }
-            Err(msg) => println!("Couldn't SIGINT, got err {}", msg),
+            Err(msg) => eprintln!("Couldn't SIGINT, got err {}", msg),
         }
     }
 
@@ -139,7 +139,7 @@ impl Process {
 
         let group_pid = unistd::getpgid(Some(pid)).map_err(|_| "Couldn't find group for PID")?;
 
-        println!("Sending {:?} to process group {}", signal, group_pid);
+        eprintln!("Sending {:?} to process group {}", signal, group_pid);
         signal::kill(negate_pid(group_pid), signal).map_err(|_| "Failed to signal pid")
     }
 
@@ -149,7 +149,7 @@ impl Process {
             directory = self.directory(),
             command = self.command(),
         );
-        println!("Starting command {}", full_command);
+        eprintln!("Starting command {}", full_command);
 
         let shell = "/bin/sh";
 
@@ -182,7 +182,7 @@ impl Process {
     }
 
     fn set_pid(&self, pid: u32) {
-        println!("Setting pid for {} to {}", self.app_name(), pid);
+        eprintln!("Setting pid for {} to {}", self.app_name(), pid);
         let mut inner = self.inner();
         let pid = Pid::from_raw(pid as i32);
         inner.pid = Some(pid);

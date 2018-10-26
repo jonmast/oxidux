@@ -11,7 +11,7 @@ use process_manager::ProcessManager;
 const ERROR_MESSAGE: &str = "No response from server";
 
 fn error_response(error: &hyper::Error) -> Response<Body> {
-    println!("Request to backend failed with error \"{}\"", error);
+    eprintln!("Request to backend failed with error \"{}\"", error);
 
     let body = Body::from(ERROR_MESSAGE);
     Response::new(body)
@@ -30,8 +30,8 @@ pub fn handle_request(
     process_manager: &ProcessManager,
 ) -> Box<Future<Item = Response<Body>, Error = hyper::Error> + Send> {
     let host = request.headers().get("HOST").unwrap().to_str().unwrap();
-    println!("Serving request for host {:?}", host);
-    println!("Full req URI {}", request.uri());
+    eprintln!("Serving request for host {:?}", host);
+    eprintln!("Full req URI {}", request.uri());
 
     let destination_url = match process_manager.find_process(&host) {
         Some(process) => process.url(request.uri()),
@@ -40,7 +40,7 @@ pub fn handle_request(
 
     Box::new(client.get(destination_url).then(|result| match result {
         Ok(response) => {
-            println!("Proxying response");
+            eprintln!("Proxying response");
             let (parts, body) = response.into_parts();
 
             futures::future::ok(Response::from_parts(parts, body))
