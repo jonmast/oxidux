@@ -13,6 +13,7 @@ extern crate toml;
 extern crate url;
 extern crate dirs;
 extern crate ansi_term;
+extern crate shellexpand;
 
 #[macro_use]
 extern crate serde_derive;

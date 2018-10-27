@@ -49,13 +49,19 @@ fn parse_incoming_command(buf: &[u8], process_manager: &ProcessManager) {
 
 fn run_command(command: &IPCCommand, process_manager: &ProcessManager) {
     match command.command.as_ref() {
-        "restart" => {
-            eprintln!("Restarting {}", command.args[0]);
-            process_manager
-                .find_process(&command.args[0])
-                .expect("Failed to find app to restart")
-                .restart();
-        }
+        "restart" => restart_app(command, process_manager),
         cmd_str => eprintln!("Unknown command {}", cmd_str),
+    }
+}
+
+fn restart_app(command: &IPCCommand, process_manager: &ProcessManager) {
+    let process = match command.args[0].as_ref() {
+        "" => process_manager.find_process_for_directory(&command.args[1]),
+        name => process_manager.find_process(name),
+    };
+
+    match process {
+        Some(process) => process.restart(),
+        None => eprintln!("Failed to find app to restart"),
     }
 }

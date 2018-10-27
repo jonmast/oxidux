@@ -6,6 +6,7 @@ use nix::unistd::{self, Pid};
 
 use futures::Future;
 use hyper::Uri;
+use shellexpand;
 use tokio;
 use tokio_pty_process::{self, CommandExt};
 use url::Url;
@@ -33,7 +34,7 @@ impl Process {
             app_name: app_config.name.clone(),
             port: app_config.port,
             command: app_config.command.clone(),
-            directory: app_config.directory.clone(),
+            directory: expand_path(&app_config.directory),
             pid: None,
             restart_pending: false,
         };
@@ -169,7 +170,7 @@ impl Process {
         self.inner().port
     }
 
-    fn directory(&self) -> String {
+    pub fn directory(&self) -> String {
         self.inner().directory.clone()
     }
 
@@ -200,16 +201,35 @@ fn negate_pid(pid: Pid) -> Pid {
     Pid::from_raw(-pid_id)
 }
 
+fn expand_path(input_path: &str) -> String {
+    match shellexpand::full(input_path) {
+        Ok(expanded_path) => expanded_path.to_string(),
+        Err(_) => input_path.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_function_name() {
+    fn test_pid_negation() {
         let pid = Pid::from_raw(1);
 
         let negated_pid = negate_pid(pid);
 
         assert_eq!(negated_pid, Pid::from_raw(-1));
+    }
+
+    #[test]
+    fn expand_path_replaces_tilde() {
+        use dirs;
+        use std::path;
+
+        let home_dir = dirs::home_dir().unwrap();
+
+        let result = expand_path("~/foo/bar");
+
+        assert_eq!(path::PathBuf::from(result), home_dir.join("foo/bar"))
     }
 }

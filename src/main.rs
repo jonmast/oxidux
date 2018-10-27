@@ -22,8 +22,7 @@ fn main() {
                 .arg(
                     Arg::with_name("process")
                         .value_name("PROCESS_NAME")
-                        .help("Name of process to restart")
-                        .required(true),
+                        .help("Name of process to restart"),
                 ),
         ).setting(AppSettings::SubcommandRequiredElseHelp)
         .get_matches();
@@ -33,7 +32,7 @@ fn main() {
         let config = config::read_config(config_file);
         oxidux::run_server(config);
     } else if let Some(matches) = matches.subcommand_matches("restart") {
-        let process_name = matches.value_of("process").unwrap();
-        oxidux::client::restart_process(process_name);
+        let process_name = matches.value_of("process");
+        oxidux::client::restart_process(process_name.unwrap_or(""));
     }
 }

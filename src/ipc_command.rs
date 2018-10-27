@@ -5,10 +5,10 @@ pub struct IPCCommand {
 }
 
 impl IPCCommand {
-    pub fn restart_command(process_name: String) -> Self {
+    pub fn restart_command(process_name: String, directory: String) -> Self {
         Self {
             command: "restart".to_string(),
-            args: vec![process_name],
+            args: vec![process_name, directory],
         }
     }
 }
