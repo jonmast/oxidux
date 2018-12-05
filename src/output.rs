@@ -1,5 +1,6 @@
 use ansi_term::Color;
 use futures::{Future, Stream};
+use process::Process;
 use tokio;
 use tokio_codec::{Framed, LinesCodec};
 use tokio_pty_process;
@@ -7,24 +8,31 @@ use tokio_pty_process;
 type OutputStream = Framed<tokio_pty_process::AsyncPtyMaster, LinesCodec>;
 pub struct Output {
     name: String,
-    stream: OutputStream,
+    process: Process,
 }
 
 impl Output {
-    pub fn for_pty(pty: tokio_pty_process::AsyncPtyMaster, name: String, index: u16) {
+    pub fn for_pty(pty: tokio_pty_process::AsyncPtyMaster, process: Process) -> Self {
+        let index = process.port();
         let stream = Framed::new(pty, LinesCodec::new());
 
-        let name = pick_color(index).paint(name).to_string();
+        let name = pick_color(index).paint(process.app_name()).to_string();
 
-        let output = Output { name, stream };
+        let output = Output { name, process };
 
-        output.setup_writer();
+        output.setup_writer(stream);
+
+        output
     }
 
-    fn setup_writer(self) {
+    fn setup_writer(&self, stream: OutputStream) {
         let name = self.name.clone();
-        let printer = self.stream.for_each(move |line| {
+        let process = self.process.clone();
+
+        let printer = stream.for_each(move |line| {
             println!("{}: {}", pick_color(1).paint(&name), line);
+            let with_newline = line.clone() + "\n";
+            process.notify_watchers(&with_newline);
             Ok(())
         });
 

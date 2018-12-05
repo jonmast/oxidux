@@ -11,4 +11,11 @@ impl IPCCommand {
             args: vec![process_name, directory],
         }
     }
+
+    pub fn connect_command(process_name: String, directory: String) -> Self {
+        Self {
+            command: "connect".to_string(),
+            args: vec![process_name, directory],
+        }
+    }
 }

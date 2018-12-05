@@ -24,6 +24,14 @@ fn main() {
                         .value_name("PROCESS_NAME")
                         .help("Name of process to restart"),
                 ),
+        ).subcommand(
+            SubCommand::with_name("connect")
+                .about("Connect to STDIN/STDOUT of a running process")
+                .arg(
+                    Arg::with_name("process")
+                        .value_name("PROCESS_NAME")
+                        .help("Name of process to connect to"),
+                ),
         ).setting(AppSettings::SubcommandRequiredElseHelp)
         .get_matches();
 
@@ -34,5 +42,8 @@ fn main() {
     } else if let Some(matches) = matches.subcommand_matches("restart") {
         let process_name = matches.value_of("process");
         oxidux::client::restart_process(process_name.unwrap_or(""));
+    } else if let Some(matches) = matches.subcommand_matches("connect") {
+        let process_name = matches.value_of("process");
+        oxidux::client::connect_to_process(process_name.unwrap_or(""));
     }
 }

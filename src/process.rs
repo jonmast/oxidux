@@ -4,11 +4,12 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use nix::sys::signal::{self, Signal};
 use nix::unistd::{self, Pid};
 
-use futures::Future;
+use futures::sync::mpsc;
+use futures::{Future, Sink, Stream};
 use hyper::Uri;
 use shellexpand;
 use tokio;
-use tokio_pty_process::{self, CommandExt};
+use tokio_pty_process::{AsyncPtyMaster, CommandExt};
 use url::Url;
 
 use config;
@@ -26,6 +27,8 @@ struct Inner {
     directory: String,
     pid: Option<Pid>,
     restart_pending: bool,
+    output: Option<Output>,
+    watchers: Vec<mpsc::Sender<Vec<u8>>>,
 }
 
 impl Process {
@@ -37,6 +40,8 @@ impl Process {
             directory: expand_path(&app_config.directory),
             pid: None,
             restart_pending: false,
+            output: None,
+            watchers: vec![],
         };
 
         Process {
@@ -68,17 +73,16 @@ impl Process {
 
     pub fn start(&self) {
         self.set_restart_pending(false);
-        let pty_master =
-            tokio_pty_process::AsyncPtyMaster::open().expect("Failed to open PTY master");
+        let pty_master = AsyncPtyMaster::open().expect("Failed to open PTY master");
 
         let child_process = self
             .build_command()
             .spawn_pty_async(&pty_master)
             .expect("Failed to start app process");
 
-        let app_name = self.app_name();
-        Output::for_pty(pty_master, app_name.clone(), self.port());
+        let output = Output::for_pty(pty_master, self.clone());
 
+        self.set_output(output);
         self.set_pid(child_process.id());
 
         let listener = self.clone();
@@ -166,12 +170,31 @@ impl Process {
         cmd
     }
 
-    fn port(&self) -> u16 {
+    pub fn notify_watchers(&self, msg: &String) {
+        for tx in &mut self.inner().watchers {
+            tokio::spawn(
+                tx.clone()
+                    .send(msg.clone().into_bytes())
+                    .map(|_| ())
+                    .map_err(|_| ()),
+            );
+        }
+    }
+
+    pub fn port(&self) -> u16 {
         self.inner().port
     }
 
     pub fn directory(&self) -> String {
         self.inner().directory.clone()
+    }
+
+    pub fn add_watcher(&self) -> impl Stream<Item = Vec<u8>, Error = ()> {
+        let (tx, rx) = mpsc::channel(5);
+
+        self.inner().watchers.push(tx);
+
+        rx
     }
 
     fn command(&self) -> String {
@@ -192,6 +215,11 @@ impl Process {
     fn set_stopped(&self) {
         let mut inner = self.inner();
         inner.pid = None;
+    }
+
+    fn set_output(&self, output: Output) {
+        let mut inner = self.inner();
+        inner.output = Some(output);
     }
 }
 
