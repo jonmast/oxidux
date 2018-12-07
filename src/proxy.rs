@@ -6,7 +6,7 @@ use hyper::client::HttpConnector;
 use hyper::Client;
 use hyper::{Body, Request, Response};
 
-use process_manager::ProcessManager;
+use crate::process_manager::ProcessManager;
 
 const ERROR_MESSAGE: &str = "No response from server";
 

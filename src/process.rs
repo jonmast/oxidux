@@ -12,8 +12,8 @@ use tokio;
 use tokio_pty_process::{AsyncPtyMaster, CommandExt};
 use url::Url;
 
-use config;
-use output::Output;
+use crate::config;
+use crate::output::Output;
 
 #[derive(Clone)]
 pub struct Process {

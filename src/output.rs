@@ -1,6 +1,6 @@
 use ansi_term::Color;
 use futures::{Future, Stream};
-use process::Process;
+use crate::process::Process;
 use tokio;
 use tokio_codec::{Framed, LinesCodec};
 use tokio_pty_process;

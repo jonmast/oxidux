@@ -3,8 +3,8 @@ use std::env;
 use std::io::{self, Write};
 use std::os::unix::net::UnixStream;
 
-use config;
-use ipc_command::IPCCommand;
+use crate::config;
+use crate::ipc_command::IPCCommand;
 
 pub fn restart_process(process_name: &str) {
     let command = IPCCommand::restart_command(process_name.to_string(), current_dir());

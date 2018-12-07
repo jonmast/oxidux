@@ -1,5 +1,5 @@
-use config;
-use ipc_command::IPCCommand;
+use crate::config;
+use crate::ipc_command::IPCCommand;
 
 use futures::future::Future;
 use futures::Stream;
@@ -13,8 +13,8 @@ use tokio_io::io::WriteHalf;
 use tokio_io::AsyncRead;
 use tokio_uds::{UnixListener, UnixStream};
 
-use process::Process;
-use process_manager::ProcessManager;
+use crate::process::Process;
+use crate::process_manager::ProcessManager;
 
 fn read_command(process_manager: &ProcessManager, connection: UnixStream) {
     let (reader, writer) = connection.split();

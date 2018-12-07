@@ -29,9 +29,9 @@ mod proxy;
 
 mod process;
 mod process_manager;
-use process_manager::ProcessManager;
+use crate::process_manager::ProcessManager;
 pub mod config;
-use config::Config;
+use crate::config::Config;
 pub mod ipc_command;
 mod ipc_listener;
 mod output;

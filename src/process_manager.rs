@@ -1,5 +1,5 @@
-use config::Config;
-use process::Process;
+use crate::config::Config;
+use crate::process::Process;
 
 #[derive(Clone)]
 pub struct ProcessManager {
