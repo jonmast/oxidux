@@ -16,7 +16,8 @@ fn main() {
                         .help("App config file")
                         .default_value("apps.toml"),
                 ),
-        ).subcommand(
+        )
+        .subcommand(
             SubCommand::with_name("restart")
                 .about("Restart a process")
                 .arg(
@@ -24,7 +25,8 @@ fn main() {
                         .value_name("PROCESS_NAME")
                         .help("Name of process to restart"),
                 ),
-        ).subcommand(
+        )
+        .subcommand(
             SubCommand::with_name("connect")
                 .about("Connect to STDIN/STDOUT of a running process")
                 .arg(
@@ -32,7 +34,8 @@ fn main() {
                         .value_name("PROCESS_NAME")
                         .help("Name of process to connect to"),
                 ),
-        ).setting(AppSettings::SubcommandRequiredElseHelp)
+        )
+        .setting(AppSettings::SubcommandRequiredElseHelp)
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("server") {

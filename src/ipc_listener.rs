@@ -32,7 +32,8 @@ fn read_command(process_manager: &ProcessManager, connection: UnixStream) {
                 run_command(&process_manager, &command, writer);
 
                 Ok(())
-            }).map_err(|e| eprintln!("Got error reading command {}", e)),
+            })
+            .map_err(|e| eprintln!("Got error reading command {}", e)),
     );
 }
 
@@ -67,7 +68,8 @@ pub fn start_ipc_sock(process_manager: ProcessManager) {
             read_command(&process_manager.clone(), connection);
 
             Ok(())
-        }).map_err(|err| eprintln!("Failed to open socket, got error {:?}", err));
+        })
+        .map_err(|err| eprintln!("Failed to open socket, got error {:?}", err));
 
     tokio::spawn(listener);
 }

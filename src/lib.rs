@@ -1,19 +1,19 @@
+extern crate ansi_term;
+extern crate dirs;
 extern crate futures;
 extern crate hyper;
 extern crate nix;
 extern crate serde_json;
+extern crate shellexpand;
 extern crate tokio;
+extern crate tokio_codec;
 extern crate tokio_core;
 extern crate tokio_io;
 extern crate tokio_process;
 extern crate tokio_pty_process;
 extern crate tokio_uds;
-extern crate tokio_codec;
 extern crate toml;
 extern crate url;
-extern crate dirs;
-extern crate ansi_term;
-extern crate shellexpand;
 
 #[macro_use]
 extern crate serde_derive;
@@ -32,10 +32,10 @@ mod process_manager;
 use crate::process_manager::ProcessManager;
 pub mod config;
 use crate::config::Config;
+pub mod client;
 pub mod ipc_command;
 mod ipc_listener;
 mod output;
-pub mod client;
 
 pub fn run_server(config: Config) {
     hyper::rt::run(future::lazy(move || {

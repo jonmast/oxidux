@@ -1,7 +1,6 @@
-use futures;
-use futures::future::Future;
-use hyper;
+use futures::future::{self, Future};
 
+use hyper;
 use hyper::client::HttpConnector;
 use hyper::Client;
 use hyper::{Body, Request, Response};
@@ -28,7 +27,7 @@ pub fn handle_request(
     request: &Request<Body>,
     client: &Client<HttpConnector>,
     process_manager: &ProcessManager,
-) -> Box<Future<Item = Response<Body>, Error = hyper::Error> + Send> {
+) -> Box<future::Future<Item = Response<Body>, Error = hyper::Error> + Send> {
     let host = request.headers().get("HOST").unwrap().to_str().unwrap();
     eprintln!("Serving request for host {:?}", host);
     eprintln!("Full req URI {}", request.uri());
@@ -43,8 +42,8 @@ pub fn handle_request(
             eprintln!("Proxying response");
             let (parts, body) = response.into_parts();
 
-            futures::future::ok(Response::from_parts(parts, body))
+            future::ok(Response::from_parts(parts, body))
         }
-        Err(e) => futures::future::ok(error_response(&e)),
+        Err(e) => future::ok(error_response(&e)),
     }))
 }
