@@ -1,15 +1,18 @@
-use std::process::{Command, ExitStatus, Stdio};
+use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
+use std::str;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use nix::sys::signal::{self, Signal};
+use nix::sys::stat;
 use nix::unistd::{self, Pid};
 
 use futures::sync::mpsc;
-use futures::{Future, Sink, Stream};
+use futures::Stream;
 use hyper::Uri;
 use shellexpand;
 use tokio;
-use tokio_pty_process::{AsyncPtyMaster, CommandExt};
 use url::Url;
 
 use crate::config;
@@ -27,7 +30,6 @@ struct Inner {
     directory: String,
     pid: Option<Pid>,
     restart_pending: bool,
-    output: Option<Output>,
     watchers: Vec<mpsc::Sender<Vec<u8>>>,
 }
 
@@ -40,7 +42,6 @@ impl Process {
             directory: expand_path(&app_config.directory),
             pid: None,
             restart_pending: false,
-            output: None,
             watchers: vec![],
         };
 
@@ -73,25 +74,37 @@ impl Process {
 
     pub fn start(&self) {
         self.set_restart_pending(false);
-        let pty_master = AsyncPtyMaster::open().expect("Failed to open PTY master");
 
-        let child_process = self
+        let child_pid = self
             .build_command()
-            .spawn_pty_async(&pty_master)
-            .expect("Failed to start app process");
+            .output()
+            .expect("Failed to start app process")
+            .stdout;
 
-        let output = Output::for_pty(pty_master, self.clone());
+        // Set pid using output from Tmux custom format
+        let child_pid = str::from_utf8(&child_pid).unwrap().trim();
 
-        self.set_output(output);
-        self.set_pid(child_process.id());
+        self.set_pid(child_pid.parse().unwrap());
 
-        let listener = self.clone();
+        let fifo_path = self.setup_fifo();
+        let catpipe = format!("cat >> {}", fifo_path.to_string_lossy());
 
-        let child_future = child_process
-            .map(move |status| listener.process_died(status))
-            .map_err(|e| panic!("failed to wait for exit: {}", e));
+        Command::new("tmux")
+            .args(&["-L", "oxidux", "pipe-pane", &catpipe])
+            .status()
+            .expect("Pipe-pane failed :(");
 
-        tokio::spawn(child_future);
+        let fifo = fs::File::open(&fifo_path).unwrap();
+        Output::for_stream(fifo, self.clone());
+    }
+
+    fn setup_fifo(&self) -> PathBuf {
+        let path = config::config_dir().join(self.app_name() + ".pipe");
+        fs::remove_file(&path).ok();
+
+        unistd::mkfifo(&path, stat::Mode::S_IRWXU).unwrap();
+
+        path
     }
 
     pub fn restart(&self) {
@@ -105,9 +118,7 @@ impl Process {
         }
     }
 
-    fn process_died(&self, status: ExitStatus) {
-        eprintln!("Process {} exited with {}", self.app_name(), status);
-
+    pub fn process_died(&self) {
         self.set_stopped();
 
         if self.restart_pending() {
@@ -158,27 +169,23 @@ impl Process {
 
         let shell = "/bin/sh";
 
-        let mut cmd = Command::new(shell);
+        let mut cmd = Command::new("tmux");
 
         cmd.env("PORT", self.port().to_string())
+            .args(&[
+                "-L",
+                "oxidux",
+                "new-session",
+                "-d",
+                "-P",
+                "-F",
+                "#{pane_pid}",
+            ])
+            .arg(shell)
             .arg("-c")
-            .arg(full_command)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .arg(full_command);
 
         cmd
-    }
-
-    pub fn notify_watchers(&self, msg: &String) {
-        for tx in &mut self.inner().watchers {
-            tokio::spawn(
-                tx.clone()
-                    .send(msg.clone().into_bytes())
-                    .map(|_| ())
-                    .map_err(|_| ()),
-            );
-        }
     }
 
     pub fn port(&self) -> u16 {
@@ -215,11 +222,6 @@ impl Process {
     fn set_stopped(&self) {
         let mut inner = self.inner();
         inner.pid = None;
-    }
-
-    fn set_output(&self, output: Output) {
-        let mut inner = self.inner();
-        inner.output = Some(output);
     }
 }
 

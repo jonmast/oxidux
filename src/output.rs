@@ -1,20 +1,23 @@
+use std::fs::File as StdFile;
+
 use crate::process::Process;
 use ansi_term::Color;
 use futures::{Future, Stream};
 use tokio;
+use tokio::fs::File;
 use tokio_codec::{Framed, LinesCodec};
 use tokio_pty_process;
 
-type OutputStream = Framed<tokio_pty_process::AsyncPtyMaster, LinesCodec>;
+type OutputStream = Framed<File, LinesCodec>;
 pub struct Output {
     name: String,
     process: Process,
 }
 
 impl Output {
-    pub fn for_pty(pty: tokio_pty_process::AsyncPtyMaster, process: Process) -> Self {
+    pub fn for_stream(fifo: StdFile, process: Process) -> Self {
         let index = process.port();
-        let stream = Framed::new(pty, LinesCodec::new());
+        let stream = Framed::new(File::from_std(fifo), LinesCodec::new());
 
         let name = pick_color(index).paint(process.app_name()).to_string();
 
@@ -27,16 +30,16 @@ impl Output {
 
     fn setup_writer(&self, stream: OutputStream) {
         let name = self.name.clone();
-        let process = self.process.clone();
 
         let printer = stream.for_each(move |line| {
             println!("{}: {}", pick_color(1).paint(&name), line);
-            let with_newline = line.clone() + "\n";
-            process.notify_watchers(&with_newline);
             Ok(())
         });
 
-        let mapped = printer.map_err(|_| ());
+        let process = self.process.clone();
+        let mapped = printer
+            .map(move |_| process.process_died())
+            .map_err(|e| eprintln!("Output failed with error {}", e));
 
         tokio::spawn(mapped);
     }
