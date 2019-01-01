@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{self, Command};
 use std::str;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -8,8 +8,6 @@ use nix::sys::signal::{self, Signal};
 use nix::sys::stat;
 use nix::unistd::{self, Pid};
 
-use futures::sync::mpsc;
-use futures::Stream;
 use hyper::Uri;
 use shellexpand;
 use tokio;
@@ -30,7 +28,6 @@ struct Inner {
     directory: String,
     pid: Option<Pid>,
     restart_pending: bool,
-    watchers: Vec<mpsc::Sender<Vec<u8>>>,
 }
 
 impl Process {
@@ -42,7 +39,6 @@ impl Process {
             directory: expand_path(&app_config.directory),
             pid: None,
             restart_pending: false,
-            watchers: vec![],
         };
 
         Process {
@@ -72,30 +68,55 @@ impl Process {
         self.inner().app_name.clone()
     }
 
-    pub fn start(&self) {
+    fn base_tmux_command(&self) -> Command {
+        let mut command = Command::new("tmux");
+        command.args(&["-L", &config::tmux_socket()]);
+
+        command
+    }
+
+    fn kill_tmux_session(&self) -> Result<process::Output, String> {
+        self.base_tmux_command()
+            .args(&["kill-session", "-t", &self.tmux_session()])
+            .output()
+            .map_err(|e| format!("Cleaning up old tmux session failed with error {}", e))
+    }
+
+    pub fn start(&self) -> Result<(), String> {
         self.set_restart_pending(false);
+
+        // Clean up any existing tmux sessions with conflicting names
+        self.kill_tmux_session()?;
 
         let child_pid = self
             .build_command()
             .output()
-            .expect("Failed to start app process")
+            .map_err(|_| "Failed to start app process")?
             .stdout;
 
         // Set pid using output from Tmux custom format
-        let child_pid = str::from_utf8(&child_pid).unwrap().trim();
+        let child_pid = str::from_utf8(&child_pid)
+            .map_err(|e| format!("{}", e))?
+            .trim();
 
-        self.set_pid(child_pid.parse().unwrap());
+        self.set_pid(
+            child_pid
+                .parse()
+                .map_err(|_| format!("\"{}\" is not a valid pid", child_pid))?,
+        );
 
         let fifo_path = self.setup_fifo();
         let catpipe = format!("cat >> {}", fifo_path.to_string_lossy());
 
-        Command::new("tmux")
-            .args(&["-L", "oxidux", "pipe-pane", &catpipe])
+        self.base_tmux_command()
+            .args(&["pipe-pane", &catpipe])
             .status()
-            .expect("Pipe-pane failed :(");
+            .map_err(|_| "Failed to set up tmux output pipe")?;
 
-        let fifo = fs::File::open(&fifo_path).unwrap();
+        let fifo =
+            fs::File::open(&fifo_path).map_err(|e| format!("Couldn't open FIFO, got {}", e))?;
         Output::for_stream(fifo, self.clone());
+        Ok(())
     }
 
     fn setup_fifo(&self) -> PathBuf {
@@ -114,7 +135,7 @@ impl Process {
         self.set_restart_pending(true);
 
         if !self.is_running() {
-            self.start();
+            self.start().unwrap_or_else(|e| eprintln!("{}", e));
         }
     }
 
@@ -122,7 +143,7 @@ impl Process {
         self.set_stopped();
 
         if self.restart_pending() {
-            self.start();
+            self.start().unwrap_or_else(|e| eprintln!("{}", e));
         }
     }
 
@@ -169,23 +190,19 @@ impl Process {
 
         let shell = "/bin/sh";
 
-        let mut cmd = Command::new("tmux");
+        let mut cmd = self.base_tmux_command();
 
         cmd.env("PORT", self.port().to_string())
-            .args(&[
-                "-L",
-                "oxidux",
-                "new-session",
-                "-d",
-                "-P",
-                "-F",
-                "#{pane_pid}",
-            ])
-            .arg(shell)
-            .arg("-c")
-            .arg(full_command);
+            .args(&["new-session", "-s", &self.tmux_session()])
+            .args(&["-d", "-P", "-F", "#{pane_pid}"])
+            .args(&[shell, "-c", &full_command])
+            .args(&["\\;", "bind-key", "-n", "C-x", "detach-client"]);
 
         cmd
+    }
+
+    pub fn tmux_session(&self) -> String {
+        self.app_name()
     }
 
     pub fn port(&self) -> u16 {
@@ -194,14 +211,6 @@ impl Process {
 
     pub fn directory(&self) -> String {
         self.inner().directory.clone()
-    }
-
-    pub fn add_watcher(&self) -> impl Stream<Item = Vec<u8>, Error = ()> {
-        let (tx, rx) = mpsc::channel(5);
-
-        self.inner().watchers.push(tx);
-
-        rx
     }
 
     fn command(&self) -> String {

@@ -13,6 +13,7 @@ use tokio_io::io::WriteHalf;
 use tokio_io::AsyncRead;
 use tokio_uds::{UnixListener, UnixStream};
 
+use crate::ipc_response::IPCResponse;
 use crate::process::Process;
 use crate::process_manager::ProcessManager;
 
@@ -43,7 +44,7 @@ fn run_command(
     writer: WriteHalf<UnixStream>,
 ) {
     match command.command.as_ref() {
-        "restart" => restart_app(process_manager, command),
+        "restart" => restart_app(process_manager, command, writer),
         "connect" => connect_output(process_manager, command, writer),
         cmd_str => eprintln!("Unknown command {}", cmd_str),
     }
@@ -74,33 +75,45 @@ pub fn start_ipc_sock(process_manager: ProcessManager) {
     tokio::spawn(listener);
 }
 
+fn send_response(process: &Process, mut writer: WriteHalf<UnixStream>) {
+    let response = IPCResponse::for_process(process);
+
+    println!("connecting");
+
+    let json = serde_json::to_string(&response).unwrap();
+    writer
+        .write_all(&json.as_ref())
+        .map_err(|_| eprintln!("Error writing IPC response"))
+        .unwrap();
+}
+
 fn connect_output(
     process_manager: &ProcessManager,
     command: &IPCCommand,
-    mut writer: WriteHalf<UnixStream>,
+    writer: WriteHalf<UnixStream>,
 ) {
     let process = lookup_process(process_manager, &command.args);
 
     match process {
         Some(process) => {
-            println!("connecting");
-            let rx = process.add_watcher();
-
-            tokio::spawn(rx.for_each(move |msg| {
-                writer
-                    .write_all(&msg)
-                    .map_err(|_| eprintln!("Error forwarding stdout"))
-            }));
+            send_response(process, writer);
         }
         None => eprintln!("Failed to find app to connect to"),
     }
 }
 
-fn restart_app(process_manager: &ProcessManager, command: &IPCCommand) {
+fn restart_app(
+    process_manager: &ProcessManager,
+    command: &IPCCommand,
+    writer: WriteHalf<UnixStream>,
+) {
     let process = lookup_process(&process_manager, &command.args);
 
     match process {
-        Some(process) => process.restart(),
+        Some(process) => {
+            process.restart();
+            send_response(process, writer);
+        }
         None => eprintln!("Failed to find app to restart"),
     }
 }

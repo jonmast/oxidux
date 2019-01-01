@@ -35,6 +35,7 @@ use crate::config::Config;
 pub mod client;
 pub mod ipc_command;
 mod ipc_listener;
+mod ipc_response;
 mod output;
 
 pub fn run_server(config: Config) {

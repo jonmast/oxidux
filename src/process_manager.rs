@@ -37,7 +37,13 @@ impl ProcessManager {
 
     pub fn start_processes(&self) {
         for process in &self.processes {
-            process.start()
+            process.start().unwrap_or_else(|e| {
+                eprintln!(
+                    "Got error `{}` when trying to start {}",
+                    e,
+                    process.app_name()
+                )
+            });
         }
     }
 }

@@ -43,3 +43,8 @@ pub fn config_dir() -> PathBuf {
 pub fn socket_path() -> PathBuf {
     config_dir().join("oxidux.sock")
 }
+
+// This needs to be dynamic to support multiple servers (as does the socket above)
+pub fn tmux_socket() -> String {
+    "oxidux".to_string()
+}
