@@ -6,7 +6,6 @@ use futures::{Future, Stream};
 use tokio;
 use tokio::fs::File;
 use tokio_codec::{Framed, LinesCodec};
-use tokio_pty_process;
 
 type OutputStream = Framed<File, LinesCodec>;
 pub struct Output {

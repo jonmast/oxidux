@@ -10,7 +10,6 @@ use nix::unistd::{self, Pid};
 
 use hyper::Uri;
 use shellexpand;
-use tokio;
 use url::Url;
 
 use crate::config;

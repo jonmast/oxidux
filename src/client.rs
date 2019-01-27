@@ -33,7 +33,7 @@ fn send_command(command: &IPCCommand) {
                 .expect("Tmux attach command failed");
         }
         Err(e) => {
-            eprintln!("Couldn't connect to socket, got err {}", e);
+            eprintln!("Couldn't connect to socket, got error \"{}\"", e);
             eprintln!("Is the server running?")
         }
     }
