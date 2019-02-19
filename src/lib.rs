@@ -15,6 +15,8 @@ extern crate toml;
 extern crate url;
 
 #[macro_use]
+extern crate failure;
+#[macro_use]
 extern crate serde_derive;
 
 use std::net::SocketAddr;

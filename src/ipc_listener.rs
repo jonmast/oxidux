@@ -1,10 +1,10 @@
 use crate::config;
 use crate::ipc_command::IPCCommand;
 
+use failure::{err_msg, Error};
 use futures::future::Future;
 use futures::Stream;
 use serde_json;
-use std::error::Error;
 use std::fs;
 use std::io::{BufReader, Write};
 use std::str;
@@ -49,7 +49,7 @@ fn run_command(
         cmd_str => eprintln!("Unknown command {}", cmd_str),
     }
 }
-fn parse_incoming_command(buf: &[u8]) -> Result<IPCCommand, Box<Error>> {
+fn parse_incoming_command(buf: &[u8]) -> Result<IPCCommand, Error> {
     let raw_json = str::from_utf8(&buf)?;
 
     let command: IPCCommand = serde_json::from_str(raw_json)?;
@@ -75,10 +75,8 @@ pub fn start_ipc_sock(process_manager: ProcessManager) {
     tokio::spawn(listener);
 }
 
-fn send_response(process: &Process, mut writer: WriteHalf<UnixStream>) {
+fn send_response(process: Result<&Process, Error>, mut writer: WriteHalf<UnixStream>) {
     let response = IPCResponse::for_process(process);
-
-    println!("connecting");
 
     let json = serde_json::to_string(&response).unwrap();
     writer
@@ -94,11 +92,13 @@ fn connect_output(
 ) {
     let process = lookup_process(process_manager, &command.args);
 
-    match process {
-        Some(process) => {
-            send_response(process, writer);
-        }
-        None => eprintln!("Failed to find app to connect to"),
+    send_response(
+        process.ok_or_else(|| err_msg("Failed to find app to connect to")),
+        writer,
+    );
+
+    if process.is_none() {
+        eprintln!("Failed to find app to connect to");
     }
 }
 
@@ -109,10 +109,14 @@ fn restart_app(
 ) {
     let process = lookup_process(&process_manager, &command.args);
 
+    send_response(
+        process.ok_or_else(|| err_msg("Failed to find app to restart")),
+        writer,
+    );
+
     match process {
         Some(process) => {
             process.restart();
-            send_response(process, writer);
         }
         None => eprintln!("Failed to find app to restart"),
     }

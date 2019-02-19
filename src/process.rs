@@ -70,6 +70,7 @@ impl Process {
     fn base_tmux_command(&self) -> Command {
         let mut command = Command::new("tmux");
         command.args(&["-L", &config::tmux_socket()]);
+        command.args(&["-f", "/dev/null"]);
 
         command
     }
@@ -195,7 +196,8 @@ impl Process {
             .args(&["new-session", "-s", &self.tmux_session()])
             .args(&["-d", "-P", "-F", "#{pane_pid}"])
             .args(&[shell, "-c", &full_command])
-            .args(&["\\;", "bind-key", "-n", "C-x", "detach-client"]);
+            .args(&[";", "set", "status-right", "Press C-x to disconnect"])
+            .args(&[";", "bind-key", "-n", "C-x", "detach-client"]);
 
         cmd
     }

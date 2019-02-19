@@ -1,3 +1,4 @@
+use failure::{err_msg, Error, ResultExt};
 use serde_json;
 use std::env;
 use std::io::Write;
@@ -8,39 +9,58 @@ use crate::config;
 use crate::ipc_command::IPCCommand;
 use crate::ipc_response::IPCResponse;
 
-pub fn restart_process(process_name: &str) {
-    let command = IPCCommand::restart_command(process_name.to_string(), current_dir());
-    send_command(&command);
+type ClientResult<T> = Result<T, Error>;
+type EmptyResult = ClientResult<()>;
+
+pub fn restart_process(process_name: &str) -> EmptyResult {
+    let command = IPCCommand::restart_command(process_name.to_string(), current_dir()?);
+    send_command(&command)?;
+    Ok(())
 }
 
-pub fn connect_to_process(process_name: &str) {
-    let command = IPCCommand::connect_command(process_name.to_string(), current_dir());
-    send_command(&command);
+pub fn connect_to_process(process_name: &str) -> EmptyResult {
+    let command = IPCCommand::connect_command(process_name.to_string(), current_dir()?);
+    send_command(&command)?;
+    Ok(())
 }
 
-fn send_command(command: &IPCCommand) {
-    match UnixStream::connect(config::socket_path()) {
-        Ok(mut socket) => {
-            serde_json::to_writer(&socket, &command).unwrap();
-            socket.write_all(b"\n").unwrap();
-            socket.flush().unwrap();
-            let response: IPCResponse = serde_json::from_reader(socket).unwrap();
+fn send_command(command: &IPCCommand) -> EmptyResult {
+    let mut socket = UnixStream::connect(config::socket_path())
+        .context("Failed to open socket. Is the server running?")?;
+
+    serde_json::to_writer(&socket, &command)?;
+    socket.write_all(b"\n")?;
+    socket.flush()?;
+    let response: IPCResponse =
+        serde_json::from_reader(socket).context("Failed to parse response from server")?;
+
+    match response {
+        IPCResponse::ConnectionDetails {
+            tmux_socket,
+            tmux_session,
+            ..
+        } => {
             println!("Connecting tmux");
-            Command::new("tmux")
-                .args(&["-L", &response.tmux_socket])
-                .args(&["attach-session", "-t", &response.tmux_session])
-                .status()
-                .expect("Tmux attach command failed");
+            let status = Command::new("tmux")
+                .args(&["-L", &tmux_socket])
+                .args(&["attach-session", "-t", &tmux_session])
+                .status()?;
+
+            if !status.success() {
+                bail!("Tmux reported Error");
+            }
         }
-        Err(e) => {
-            eprintln!("Couldn't connect to socket, got error \"{}\"", e);
-            eprintln!("Is the server running?")
-        }
+        IPCResponse::NotFound(message) => eprintln!("Server returned error: {}", message),
     }
+
+    Ok(())
 }
 
-fn current_dir() -> String {
-    let current_dir_path = env::current_dir().expect("Can't determine working directory");
+fn current_dir() -> ClientResult<String> {
+    let current_dir_path = env::current_dir()?;
 
-    current_dir_path.to_str().unwrap().to_string()
+    Ok(current_dir_path
+        .to_str()
+        .ok_or_else(|| err_msg("Current directory is an invalid string"))?
+        .to_string())
 }

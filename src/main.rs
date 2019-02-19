@@ -4,7 +4,7 @@ extern crate oxidux;
 use clap::{App, AppSettings, Arg, SubCommand};
 use oxidux::config;
 
-fn main() {
+fn main() -> Result<(), failure::Error> {
     let matches = App::new("oxidux")
         .about("Manage processes in development")
         .subcommand(
@@ -44,9 +44,11 @@ fn main() {
         oxidux::run_server(config);
     } else if let Some(matches) = matches.subcommand_matches("restart") {
         let process_name = matches.value_of("process");
-        oxidux::client::restart_process(process_name.unwrap_or(""));
+        oxidux::client::restart_process(process_name.unwrap_or(""))?;
     } else if let Some(matches) = matches.subcommand_matches("connect") {
         let process_name = matches.value_of("process");
-        oxidux::client::connect_to_process(process_name.unwrap_or(""));
+        oxidux::client::connect_to_process(process_name.unwrap_or(""))?;
     }
+
+    Ok(())
 }
