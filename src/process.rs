@@ -182,9 +182,10 @@ impl Process {
 
     fn build_command(&self) -> Command {
         let full_command = format!(
-            "cd {directory}; {command}",
+            "cd {directory}; export PORT={port}; {command}",
             directory = self.directory(),
             command = self.command(),
+            port = self.port()
         );
         eprintln!("Starting command {}", full_command);
 
@@ -192,8 +193,8 @@ impl Process {
 
         let mut cmd = self.base_tmux_command();
 
-        cmd.env("PORT", self.port().to_string())
-            .args(&["new-session", "-s", &self.tmux_session()])
+        println!("Port is {}", self.port());
+        cmd.args(&["new-session", "-s", &self.tmux_session()])
             .args(&["-d", "-P", "-F", "#{pane_pid}"])
             .args(&[shell, "-c", &full_command])
             .args(&[";", "set", "status-right", "Press C-x to disconnect"])
