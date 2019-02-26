@@ -1,22 +1,19 @@
-use std::fs::File as StdFile;
-
 use crate::process::Process;
 use ansi_term::Color;
 use futures::{Future, Stream};
-use tokio;
-use tokio::fs::File;
-use tokio_codec::{Framed, LinesCodec};
+use tokio::prelude::*;
+use tokio_codec::{FramedRead, LinesCodec};
 
-type OutputStream = Framed<File, LinesCodec>;
+type OutputStream<T> = FramedRead<T, LinesCodec>;
 pub struct Output {
     name: String,
     process: Process,
 }
 
 impl Output {
-    pub fn for_stream(fifo: StdFile, process: Process) -> Self {
+    pub fn for_stream<T: 'static + AsyncRead + Send>(fifo: T, process: Process) -> Self {
         let index = process.port();
-        let stream = Framed::new(File::from_std(fifo), LinesCodec::new());
+        let stream = FramedRead::new(fifo, LinesCodec::new());
 
         let name = pick_color(index).paint(process.app_name()).to_string();
 
@@ -27,7 +24,10 @@ impl Output {
         output
     }
 
-    fn setup_writer(&self, stream: OutputStream) {
+    fn setup_writer<T>(&self, stream: OutputStream<T>)
+    where
+        T: 'static + AsyncRead + Send,
+    {
         let name = self.name.clone();
 
         let printer = stream.for_each(move |line| {

@@ -10,6 +10,7 @@ use nix::unistd::{self, Pid};
 
 use hyper::Uri;
 use shellexpand;
+use tokio::fs::File;
 use url::Url;
 
 use crate::config;
@@ -115,7 +116,7 @@ impl Process {
 
         let fifo =
             fs::File::open(&fifo_path).map_err(|e| format!("Couldn't open FIFO, got {}", e))?;
-        Output::for_stream(fifo, self.clone());
+        Output::for_stream(File::from_std(fifo), self.clone());
         Ok(())
     }
 
