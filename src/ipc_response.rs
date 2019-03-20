@@ -2,6 +2,7 @@ use crate::config;
 use crate::process::Process;
 
 use failure::Error;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum IPCResponse {

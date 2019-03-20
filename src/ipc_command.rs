@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct IPCCommand {
     pub command: String,

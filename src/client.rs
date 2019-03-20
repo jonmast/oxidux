@@ -1,4 +1,4 @@
-use failure::{err_msg, Error, ResultExt};
+use failure::{bail, err_msg, Error, ResultExt};
 use serde_json;
 use std::env;
 use std::io::Write;

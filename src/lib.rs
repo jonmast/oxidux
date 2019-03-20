@@ -1,24 +1,3 @@
-extern crate ansi_term;
-extern crate dirs;
-extern crate futures;
-extern crate hyper;
-extern crate nix;
-extern crate serde_json;
-extern crate shellexpand;
-extern crate tokio;
-extern crate tokio_codec;
-extern crate tokio_core;
-extern crate tokio_io;
-extern crate tokio_process;
-extern crate tokio_uds;
-extern crate toml;
-extern crate url;
-
-#[macro_use]
-extern crate failure;
-#[macro_use]
-extern crate serde_derive;
-
 use std::net::SocketAddr;
 
 use futures::future::{self, Future};

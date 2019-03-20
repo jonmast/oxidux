@@ -1,6 +1,3 @@
-extern crate clap;
-extern crate oxidux;
-
 use clap::{App, AppSettings, Arg, SubCommand};
 use oxidux::config;
 
