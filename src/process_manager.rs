@@ -26,13 +26,13 @@ impl ProcessManager {
         eprintln!("Looking for app {}", app_name);
         self.processes
             .iter()
-            .find(|ref process| process.app_name() == app_name)
+            .find(|process| process.app_name() == app_name)
     }
 
     pub fn find_process_for_directory(&self, directory: &str) -> Option<&Process> {
         self.processes
             .iter()
-            .find(|ref process| directory.starts_with(&process.directory()))
+            .find(|process| directory.starts_with(&process.directory()))
     }
 
     pub fn start_processes(&self) {

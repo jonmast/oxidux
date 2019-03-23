@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::process::{self, Command};
 use std::str;
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time;
 
 use nix::sys::signal::{self, Signal};
 use nix::sys::stat;
@@ -15,6 +16,8 @@ use url::Url;
 
 use crate::config;
 use crate::output::Output;
+use tokio::prelude::*;
+use tokio::timer::Interval;
 
 #[derive(Clone)]
 pub struct Process {
@@ -105,6 +108,8 @@ impl Process {
                 .parse()
                 .map_err(|_| format!("\"{}\" is not a valid pid", child_pid))?,
         );
+
+        self.watch_for_exit();
 
         let fifo_path = self.setup_fifo();
         let catpipe = format!("cat >> {}", fifo_path.to_string_lossy());
@@ -198,6 +203,7 @@ impl Process {
         cmd.args(&["new-session", "-s", &self.tmux_session()])
             .args(&["-d", "-P", "-F", "#{pane_pid}"])
             .args(&[shell, "-c", &full_command])
+            .args(&[";", "set", "remain-on-exit", "on"])
             .args(&[";", "set", "status-right", "Press C-x to disconnect"])
             .args(&[";", "bind-key", "-n", "C-x", "detach-client"]);
 
@@ -235,7 +241,30 @@ impl Process {
         let mut inner = self.inner();
         inner.pid = None;
     }
+
+    fn watch_for_exit(&self) {
+        let process = self.clone();
+        let watcher = Interval::new_interval(time::Duration::from_millis(WATCH_INTERVAL_MS))
+            .take_while(move |_| {
+                if let Some(pid) = process.pid() {
+                    if signal::kill(pid, None).is_err() {
+                        println!("Process died");
+                        process.process_died();
+
+                        return Ok(false);
+                    }
+                }
+
+                Ok(true)
+            })
+            .for_each(|_| Ok(()))
+            .map_err(|_| eprintln!("Error in process watcher loop"));
+
+        tokio::spawn(watcher);
+    }
 }
+
+const WATCH_INTERVAL_MS: u64 = 100;
 
 fn negate_pid(pid: Pid) -> Pid {
     let pid_id: i32 = pid.into();
