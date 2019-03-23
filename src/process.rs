@@ -164,7 +164,7 @@ impl Process {
         }
     }
 
-    fn is_running(&self) -> bool {
+    pub fn is_running(&self) -> bool {
         self.pid().is_some()
     }
 

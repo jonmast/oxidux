@@ -3,7 +3,7 @@ use crate::process::Process;
 
 #[derive(Clone)]
 pub struct ProcessManager {
-    processes: Vec<Process>,
+    pub processes: Vec<Process>,
 }
 
 impl ProcessManager {

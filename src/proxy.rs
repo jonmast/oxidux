@@ -4,6 +4,7 @@ use hyper;
 use hyper::client::HttpConnector;
 use hyper::Client;
 use hyper::{Body, Request, Response};
+mod host_missing;
 
 use crate::process_manager::ProcessManager;
 
@@ -13,13 +14,6 @@ fn error_response(error: &hyper::Error) -> Response<Body> {
     eprintln!("Request to backend failed with error \"{}\"", error);
 
     let body = Body::from(ERROR_MESSAGE);
-    Response::new(body)
-}
-
-const MISSING_HOST_MESSAGE: &str = "No such host was found";
-fn missing_host_response() -> Response<Body> {
-    let body = Body::from(MISSING_HOST_MESSAGE);
-
     Response::new(body)
 }
 
@@ -34,7 +28,12 @@ pub fn handle_request(
 
     let destination_url = match process_manager.find_process(&host) {
         Some(process) => process.url(request.uri()),
-        None => return Box::new(futures::future::ok(missing_host_response())),
+        None => {
+            return Box::new(futures::future::ok(host_missing::missing_host_response(
+                host,
+                process_manager,
+            )));
+        }
     };
 
     Box::new(client.get(destination_url).then(|result| match result {
