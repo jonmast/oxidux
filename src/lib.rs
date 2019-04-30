@@ -6,6 +6,7 @@ use futures::sync::oneshot;
 use hyper::service::service_fn;
 use hyper::{Client, Server};
 use tokio::prelude::*;
+use tokio::runtime::Runtime;
 use tokio_signal;
 
 mod proxy;
@@ -52,8 +53,8 @@ fn ctrlc_listener(process_manager: ProcessManager) -> impl Future<Item = (), Err
 }
 
 pub fn run_server(config: Config) {
-    tokio::runtime::Runtime::new()
-        .unwrap()
+    let mut runtime = Runtime::new().unwrap();
+    runtime
         .block_on(future::lazy(move || {
             let process_manager = ProcessManager::new(&config);
 
@@ -79,6 +80,8 @@ pub fn run_server(config: Config) {
                 .map_err(|err| eprintln!("serve error: {:?}", err))
         }))
         .unwrap();
+
+    runtime.shutdown_now();
 }
 
 fn build_address(config: &Config) -> SocketAddr {
