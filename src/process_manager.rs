@@ -6,12 +6,17 @@ pub struct ProcessManager {
     pub processes: Vec<Process>,
 }
 
+const PORT_START: u16 = 7500;
+
 impl ProcessManager {
     pub fn new(config: &Config) -> ProcessManager {
         let processes = config
             .apps
             .iter()
-            .map(|process_config| Process::from_config(&process_config))
+            .enumerate()
+            .map(|(idx, process_config)| {
+                Process::from_config(&process_config, PORT_START + (idx as u16))
+            })
             .collect();
 
         ProcessManager { processes }

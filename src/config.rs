@@ -21,7 +21,7 @@ pub struct ProxyConfig {
 pub struct App {
     pub name: String,
     pub directory: String,
-    pub port: u16,
+    pub port: Option<u16>,
     pub command: String,
 }
 

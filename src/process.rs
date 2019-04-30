@@ -34,10 +34,10 @@ struct Inner {
 }
 
 impl Process {
-    pub fn from_config(app_config: &config::App) -> Self {
+    pub fn from_config(app_config: &config::App, auto_port: u16) -> Self {
         let data = Inner {
             app_name: app_config.name.clone(),
-            port: app_config.port,
+            port: app_config.port.unwrap_or(auto_port),
             command: app_config.command.clone(),
             directory: expand_path(&app_config.directory),
             pid: None,
