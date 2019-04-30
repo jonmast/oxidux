@@ -2,8 +2,11 @@ use std::net::SocketAddr;
 
 use futures::future::{self, Future};
 
+use futures::sync::oneshot;
 use hyper::service::service_fn;
 use hyper::{Client, Server};
+use tokio::prelude::*;
+use tokio_signal;
 
 mod proxy;
 
@@ -18,32 +21,61 @@ mod ipc_listener;
 mod ipc_response;
 mod output;
 
-pub fn run_server(config: Config) {
-    hyper::rt::run(future::lazy(move || {
-        let process_manager = start_process_manager(&config);
+fn ctrlc_listener(process_manager: ProcessManager) -> impl Future<Item = (), Error = ()> {
+    let (tx, rx) = oneshot::channel::<()>();
 
-        ipc_listener::start_ipc_sock(process_manager.clone());
+    let mut shutdown_tx = Some(tx);
 
-        let client = Client::new();
+    let signal_handler = tokio_signal::ctrl_c().flatten_stream().for_each(move |()| {
+        if let Some(tx) = shutdown_tx.take() {
+            eprintln!("Gracefully shutting down");
 
-        let proxy = move || {
-            let client = client.clone();
-            let process_manager = process_manager.clone();
+            process_manager.shutdown();
+            for process in &process_manager.processes {
+                if process.is_running() {
+                    process.stop();
+                }
+            }
 
-            service_fn(move |req| proxy::handle_request(&req, &client, &process_manager))
-        };
+            tx.send(()).unwrap();
+        } else {
+            eprintln!("Forcibly shutting down");
+            std::process::exit(1);
+        }
 
-        Server::bind(&build_address(&config))
-            .serve(proxy)
-            .map_err(|err| eprintln!("serve error: {:?}", err))
-    }));
+        Ok(())
+    });
+    tokio::spawn(signal_handler.map_err(|err| eprintln!("Error in signal handler {}", err)));
+
+    rx.map_err(|_| eprintln!("Error in shutdown channel"))
+        .and_then(|_| Ok(()))
 }
 
-fn start_process_manager(config: &Config) -> ProcessManager {
-    let process_manager = ProcessManager::new(&config);
-    process_manager.start_processes();
+pub fn run_server(config: Config) {
+    tokio::runtime::current_thread::Runtime::new()
+        .unwrap()
+        .block_on(future::lazy(move || {
+            let process_manager = ProcessManager::new(&config);
 
-    process_manager
+            let shutdown_rx = ctrlc_listener(process_manager.clone());
+
+            ipc_listener::start_ipc_sock(process_manager.clone());
+
+            let client = Client::new();
+
+            let proxy = move || {
+                let client = client.clone();
+                let process_manager = process_manager.clone();
+
+                service_fn(move |req| proxy::handle_request(&req, &client, &process_manager))
+            };
+
+            Server::bind(&build_address(&config))
+                .serve(proxy)
+                .with_graceful_shutdown(shutdown_rx.and_then(|_| Ok(())))
+                .map_err(|err| eprintln!("serve error: {:?}", err))
+        }))
+        .unwrap();
 }
 
 fn build_address(config: &Config) -> SocketAddr {

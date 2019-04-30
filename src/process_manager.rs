@@ -35,15 +35,11 @@ impl ProcessManager {
             .find(|process| directory.starts_with(&process.directory()))
     }
 
-    pub fn start_processes(&self) {
+    pub fn shutdown(&self) {
         for process in &self.processes {
-            process.start().unwrap_or_else(|e| {
-                eprintln!(
-                    "Got error `{}` when trying to start {}",
-                    e,
-                    process.app_name()
-                )
-            });
+            if process.is_running() {
+                process.stop();
+            }
         }
     }
 }
