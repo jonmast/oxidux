@@ -52,7 +52,7 @@ fn ctrlc_listener(process_manager: ProcessManager) -> impl Future<Item = (), Err
 }
 
 pub fn run_server(config: Config) {
-    tokio::runtime::current_thread::Runtime::new()
+    tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(future::lazy(move || {
             let process_manager = ProcessManager::new(&config);
@@ -70,7 +70,10 @@ pub fn run_server(config: Config) {
                 service_fn(move |req| proxy::handle_request(&req, &client, &process_manager))
             };
 
-            Server::bind(&build_address(&config))
+            let addr = &build_address(&config);
+            println!("Starting proxy server on {}", addr);
+
+            Server::bind(addr)
                 .serve(proxy)
                 .with_graceful_shutdown(shutdown_rx.and_then(|_| Ok(())))
                 .map_err(|err| eprintln!("serve error: {:?}", err))
