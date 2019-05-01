@@ -68,7 +68,7 @@ pub fn run_server(config: Config) {
                 let client = client.clone();
                 let process_manager = process_manager.clone();
 
-                service_fn(move |req| proxy::handle_request(&req, &client, &process_manager))
+                service_fn(move |req| proxy::handle_request(req, &client, &process_manager))
             };
 
             let addr = &build_address(&config);

@@ -27,7 +27,7 @@ fn error_response(error: &hyper::Error, process: &Process) -> Response<Body> {
 }
 
 pub fn handle_request(
-    request: &Request<Body>,
+    mut request: Request<Body>,
     client: &Client<HttpConnector>,
     process_manager: &ProcessManager,
 ) -> Box<future::Future<Item = Response<Body>, Error = hyper::Error> + Send> {
@@ -46,18 +46,14 @@ pub fn handle_request(
     };
 
     let destination_url = process.url(request.uri());
+    *request.uri_mut() = destination_url;
 
-    Box::new(
-        client
-            .get(destination_url)
-            .then(move |result| match result {
-                Ok(response) => {
-                    eprintln!("Proxying response");
-                    let (parts, body) = response.into_parts();
+    Box::new(client.request(request).then(move |result| match result {
+        Ok(response) => {
+            eprintln!("Proxying response");
 
-                    future::ok(Response::from_parts(parts, body))
-                }
-                Err(e) => future::ok(error_response(&e, &process)),
-            }),
-    )
+            future::ok(response)
+        }
+        Err(e) => future::ok(error_response(&e, &process)),
+    }))
 }
