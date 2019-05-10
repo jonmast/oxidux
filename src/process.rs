@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::BufRead;
 use std::path::PathBuf;
 use std::process::{self, Command};
 use std::str;
@@ -16,6 +17,7 @@ use url::Url;
 
 use crate::config;
 use crate::output::Output;
+use failure::{bail, err_msg, format_err, ResultExt};
 use tokio::prelude::*;
 use tokio::timer::Interval;
 
@@ -86,8 +88,57 @@ impl Process {
             .map_err(|e| format!("Cleaning up old tmux session failed with error {}", e))
     }
 
+    fn respawn_tmux_session(&self) -> Result<(), failure::Error> {
+        let mut cmd = self.base_tmux_command();
+
+        let result = cmd
+            .args(&["respawn-window", "-t", &self.tmux_session()])
+            .args(&self.shell_args())
+            .status()
+            .context("Error trying to run respawn command")?;
+
+        if !result.success() {
+            bail!("Non-zero return status from respawn-session");
+        }
+
+        let pids = self
+            .base_tmux_command()
+            .args(&["list-sessions", "-F", "#{session_name}|#{pane_pid}"])
+            .output()?
+            .stdout;
+
+        let pid = pids
+            .lines()
+            .find_map(|line| match line {
+                Err(_) => None,
+                Ok(line) => {
+                    let parts: Vec<&str> = line.splitn(2, '|').collect();
+
+                    match parts[..] {
+                        [session, pid] if session == self.tmux_session() => Some(String::from(pid)),
+                        _ => None,
+                    }
+                }
+            })
+            .ok_or(err_msg("Failed to find PID for session"))?;
+
+        self.set_pid(
+            pid.parse()
+                .map_err(|_| format_err!("\"{}\" is not a valid pid", pid))?,
+        );
+
+        self.watch_for_exit();
+
+        Ok(())
+    }
+
     pub fn start(&self) -> Result<(), String> {
         self.set_restart_pending(false);
+
+        if self.respawn_tmux_session().is_ok() {
+            // Bail out if respawning worked
+            return Ok(());
+        }
 
         // Clean up any existing tmux sessions with conflicting names
         self.kill_tmux_session()?;
@@ -186,23 +237,27 @@ impl Process {
         signal::kill(negate_pid(group_pid), signal).map_err(|_| "Failed to signal pid")
     }
 
-    fn build_command(&self) -> Command {
+    fn shell_args(&self) -> [String; 3] {
         let full_command = format!(
             "cd {directory}; export PORT={port}; {command}",
             directory = self.directory(),
             command = self.command(),
             port = self.port()
         );
+
         eprintln!("Starting command {}", full_command);
 
         let shell = "/bin/sh";
 
+        [shell.into(), "-c".into(), full_command]
+    }
+
+    fn build_command(&self) -> Command {
         let mut cmd = self.base_tmux_command();
 
-        println!("Port is {}", self.port());
         cmd.args(&["new-session", "-s", &self.tmux_session()])
             .args(&["-d", "-P", "-F", "#{pane_pid}"])
-            .args(&[shell, "-c", &full_command])
+            .args(&self.shell_args())
             .args(&[";", "set", "remain-on-exit", "on"])
             .args(&[";", "set", "status-right", "Press C-x to disconnect"])
             .args(&[";", "bind-key", "-n", "C-x", "detach-client"]);
