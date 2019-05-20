@@ -33,6 +33,7 @@ struct Inner {
     directory: String,
     pid: Option<Pid>,
     restart_pending: bool,
+    headers: hyper::HeaderMap,
 }
 
 impl Process {
@@ -44,6 +45,7 @@ impl Process {
             directory: expand_path(&app_config.directory),
             pid: None,
             restart_pending: false,
+            headers: app_config.parsed_headers(),
         };
 
         Process {
@@ -316,6 +318,10 @@ impl Process {
             .map_err(|_| eprintln!("Error in process watcher loop"));
 
         tokio::spawn(watcher);
+    }
+
+    pub fn headers(&self) -> hyper::HeaderMap {
+        self.inner().headers.clone()
     }
 }
 

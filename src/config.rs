@@ -1,9 +1,11 @@
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::PathBuf;
 
 use dirs;
+use hyper::header::{HeaderMap, HeaderName, HeaderValue};
 use toml;
 
 #[derive(Deserialize, Debug)]
@@ -23,6 +25,24 @@ pub struct App {
     pub directory: String,
     pub port: Option<u16>,
     pub command: String,
+    pub headers: Option<HashMap<String, String>>,
+}
+
+impl App {
+    pub fn parsed_headers(&self) -> HeaderMap {
+        match &self.headers {
+            Some(headers) => headers
+                .iter()
+                .map(|(key, value)| {
+                    let header_name = HeaderName::from_bytes(key.as_bytes()).unwrap();
+                    let header_value = HeaderValue::from_bytes(value.as_bytes()).unwrap();
+
+                    (header_name, header_value)
+                })
+                .collect(),
+            None => HeaderMap::default(),
+        }
+    }
 }
 
 pub fn read_config(file_name: &str) -> Config {

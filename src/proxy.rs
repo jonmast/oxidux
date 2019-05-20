@@ -2,8 +2,7 @@ use futures::future::{self, Future};
 
 use hyper;
 use hyper::client::HttpConnector;
-use hyper::Client;
-use hyper::{Body, Request, Response};
+use hyper::{Body, Client, Request, Response};
 mod autostart_response;
 mod host_missing;
 
@@ -47,6 +46,9 @@ pub fn handle_request(
 
     let destination_url = process.url(request.uri());
     *request.uri_mut() = destination_url;
+
+    // Apply header overrides from config
+    request.headers_mut().extend(process.headers());
 
     Box::new(client.request(request).then(move |result| match result {
         Ok(response) => {
