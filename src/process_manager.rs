@@ -23,10 +23,8 @@ impl ProcessManager {
     }
 
     pub fn find_process(&self, hostname: &str) -> Option<&Process> {
-        let app_name = match hostname.find('.') {
-            Some(tld_start) => &hostname[0..tld_start],
-            None => hostname,
-        };
+        let parts: Vec<&str> = hostname.split('.').collect();
+        let &app_name = parts.get(parts.len() - 2).unwrap_or(&hostname);
 
         eprintln!("Looking for app {}", app_name);
         self.processes
@@ -46,5 +44,33 @@ impl ProcessManager {
                 process.stop();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config;
+
+    #[test]
+    fn find_process_with_subdomain() {
+        let app_config = config::App {
+            name: "the_app".into(),
+            directory: "".into(),
+            port: None,
+            command: "".into(),
+            headers: None,
+        };
+
+        let process = Process::from_config(&app_config, 0);
+        let process_manager = ProcessManager {
+            processes: vec![process],
+        };
+
+        let found_app = process_manager
+            .find_process("subdomain.the_app.test")
+            .expect("Failed to find process by hostname");
+
+        assert!(found_app.app_name() == "the_app")
     }
 }
