@@ -19,12 +19,13 @@ const RESTART_RESPONSE: &str = "
             var timeEl = document.getElementById('time');
             var seconds = parseInt(timeEl.textContent);
 
-            setInterval(function() {
+            var intervalId = setInterval(function() {
                 seconds -= 1;
                 timeEl.innerText = seconds;
 
                 if (seconds < 1) {
                     location.reload();
+                    clearInterval(intervalId);
                 }
             }, 1000);
         </script>
