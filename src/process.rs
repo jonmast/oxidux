@@ -122,7 +122,7 @@ impl Process {
                     }
                 }
             })
-            .ok_or(err_msg("Failed to find PID for session"))?;
+            .ok_or_else(|| err_msg("Failed to find PID for session"))?;
 
         self.set_pid(
             pid.parse()

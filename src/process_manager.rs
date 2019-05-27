@@ -22,9 +22,11 @@ impl ProcessManager {
         ProcessManager { processes }
     }
 
+    /// Find the process associated with a given hostname
     pub fn find_process(&self, hostname: &str) -> Option<&Process> {
-        let parts: Vec<&str> = hostname.split('.').collect();
-        let &app_name = parts.get(parts.len() - 2).unwrap_or(&hostname);
+        let parts = hostname.split('.');
+        // Penultimate segment should contain app name
+        let app_name = parts.rev().nth(1).unwrap_or(hostname);
 
         eprintln!("Looking for app {}", app_name);
         self.processes
