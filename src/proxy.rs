@@ -99,6 +99,7 @@ fn build_address(config: &Config) -> SocketAddr {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config;
 
     #[test]
     fn build_bind_address_from_config() {
