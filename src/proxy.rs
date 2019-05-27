@@ -1,12 +1,15 @@
 use futures::future::{self, Future};
+use hyper::service::service_fn;
+use std::net::SocketAddr;
 
 use hyper;
 use hyper::client::HttpConnector;
-use hyper::{Body, Client, Request, Response};
+use hyper::{Body, Client, Request, Response, Server};
+
 mod autostart_response;
 mod host_missing;
 
-use crate::{process::Process, process_manager::ProcessManager};
+use crate::{config::Config, process::Process, process_manager::ProcessManager};
 
 const ERROR_MESSAGE: &str = "No response from server";
 
@@ -25,7 +28,35 @@ fn error_response(error: &hyper::Error, process: &Process) -> Response<Body> {
     }
 }
 
-pub fn handle_request(
+pub fn start_server(
+    config: &Config,
+    process_manager: ProcessManager,
+    shutdown_handler: impl Future,
+) -> impl Future<Item = (), Error = ()> {
+    let mut listenfd = listenfd::ListenFd::from_env();
+    let (addr, server) = if let Some(listener) = listenfd.take_tcp_listener(0).unwrap() {
+        let addr = listener.local_addr().unwrap();
+        (addr, Server::from_tcp(listener).unwrap())
+    } else {
+        let addr = &build_address(&config);
+        (*addr, Server::bind(addr))
+    };
+
+    eprintln!("Starting proxy server on {}", addr);
+
+    let proxy = move || {
+        let client = Client::new();
+        let process_manager = process_manager.clone();
+
+        service_fn(move |req| handle_request(req, &client, &process_manager))
+    };
+    server
+        .serve(proxy)
+        .with_graceful_shutdown(shutdown_handler.and_then(|_| Ok(())))
+        .map_err(|err| eprintln!("serve error: {:?}", err))
+}
+
+fn handle_request(
     mut request: Request<Body>,
     client: &Client<HttpConnector>,
     process_manager: &ProcessManager,
@@ -58,4 +89,28 @@ pub fn handle_request(
         }
         Err(e) => future::ok(error_response(&e, &process)),
     }))
+}
+
+fn build_address(config: &Config) -> SocketAddr {
+    let port = config.general.proxy_port;
+    format!("127.0.0.1:{}", port).parse().unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_bind_address_from_config() {
+        let config = config::Config {
+            apps: Vec::new(),
+            general: config::ProxyConfig { proxy_port: 80 },
+        };
+
+        let addr = build_address(&config);
+
+        assert_eq!(addr.port(), 80);
+        let localhost: std::net::IpAddr = "127.0.0.1".parse().unwrap();
+        assert_eq!(addr.ip(), localhost);
+    }
 }
