@@ -30,11 +30,6 @@ fn ctrlc_listener(process_manager: ProcessManager) -> impl Future<Item = (), Err
             eprintln!("Gracefully shutting down");
 
             process_manager.shutdown();
-            for process in &process_manager.processes {
-                if process.is_running() {
-                    process.stop();
-                }
-            }
 
             tx.send(()).unwrap();
         } else {

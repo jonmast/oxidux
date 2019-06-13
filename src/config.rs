@@ -25,23 +25,21 @@ pub struct App {
     pub directory: String,
     pub port: Option<u16>,
     pub command: String,
-    pub headers: Option<HashMap<String, String>>,
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
 }
 
 impl App {
     pub fn parsed_headers(&self) -> HeaderMap {
-        match &self.headers {
-            Some(headers) => headers
-                .iter()
-                .map(|(key, value)| {
-                    let header_name = HeaderName::from_bytes(key.as_bytes()).unwrap();
-                    let header_value = HeaderValue::from_bytes(value.as_bytes()).unwrap();
+        self.headers
+            .iter()
+            .map(|(key, value)| {
+                let header_name = HeaderName::from_bytes(key.as_bytes()).unwrap();
+                let header_value = HeaderValue::from_bytes(value.as_bytes()).unwrap();
 
-                    (header_name, header_value)
-                })
-                .collect(),
-            None => HeaderMap::default(),
-        }
+                (header_name, header_value)
+            })
+            .collect()
     }
 }
 
@@ -68,4 +66,24 @@ pub fn socket_path() -> PathBuf {
 // This needs to be dynamic to support multiple servers (as does the socket above)
 pub fn tmux_socket() -> String {
     "oxidux".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hyper::header::HOST;
+
+    #[test]
+    fn test_header_deserialization() {
+        let data = "
+            directory = '/home/jon'
+            name = 'bar'
+            command = 'echo hello'
+            headers = {host = 'test', foo='bar'}
+        ";
+
+        let app: App = toml::from_str(data).unwrap();
+
+        assert!(app.parsed_headers().contains_key(HOST));
+    }
 }

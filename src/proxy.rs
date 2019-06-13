@@ -42,7 +42,7 @@ pub fn start_server(
         (*addr, Server::bind(addr))
     };
 
-    eprintln!("Starting proxy server on {}", addr);
+    println!("Starting proxy server on {}", addr);
 
     let proxy = move || {
         let client = Client::new();

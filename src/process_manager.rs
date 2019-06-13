@@ -53,6 +53,7 @@ impl ProcessManager {
 mod tests {
     use super::*;
     use crate::config;
+    use std::collections::HashMap;
 
     #[test]
     fn find_process_with_subdomain() {
@@ -61,7 +62,7 @@ mod tests {
             directory: "".into(),
             port: None,
             command: "".into(),
-            headers: None,
+            headers: HashMap::default(),
         };
 
         let process = Process::from_config(&app_config, 0);
