@@ -10,10 +10,8 @@ use nix::sys::signal::{self, Signal};
 use nix::sys::stat;
 use nix::unistd::{self, Pid};
 
-use hyper::Uri;
 use shellexpand;
 use tokio::fs::File;
-use url::Url;
 
 use crate::config;
 use crate::output::Output;
@@ -51,20 +49,6 @@ impl Process {
         Process {
             inner: Arc::new(Mutex::new(data)),
         }
-    }
-
-    pub fn url(&self, request_path: &Uri) -> Uri {
-        let base_url = Url::parse("http://localhost/").unwrap();
-
-        let mut destination_url = base_url
-            .join(request_path.path_and_query().unwrap().as_str())
-            .expect("Invalid request URL");
-
-        destination_url.set_port(Some(self.port())).unwrap();
-
-        eprintln!("Starting request to backend {}", destination_url);
-
-        destination_url.as_str().parse().unwrap()
     }
 
     fn inner(&self) -> MutexGuard<Inner> {

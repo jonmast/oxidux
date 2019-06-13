@@ -1,10 +1,10 @@
-use futures::future::{self, Future};
-use hyper::service::service_fn;
 use std::net::SocketAddr;
 
-use hyper;
-use hyper::client::HttpConnector;
-use hyper::{Body, Client, Request, Response, Server};
+use futures::future::{self, Future};
+use hyper::{
+    self, client::HttpConnector, service::service_fn, Body, Client, Request, Response, Server, Uri,
+};
+use url::Url;
 
 mod autostart_response;
 mod host_missing;
@@ -75,7 +75,7 @@ fn handle_request(
         }
     };
 
-    let destination_url = process.url(request.uri());
+    let destination_url = process_url(&process, request.uri());
     *request.uri_mut() = destination_url;
 
     // Apply header overrides from config
@@ -94,6 +94,20 @@ fn handle_request(
 fn build_address(config: &Config) -> SocketAddr {
     let port = config.general.proxy_port;
     format!("127.0.0.1:{}", port).parse().unwrap()
+}
+
+fn process_url(process: &Process, request_url: &Uri) -> Uri {
+    let base_url = Url::parse("http://localhost/").unwrap();
+
+    let mut destination_url = base_url
+        .join(request_url.path_and_query().unwrap().as_str())
+        .expect("Invalid request URL");
+
+    destination_url.set_port(Some(process.port())).unwrap();
+
+    eprintln!("Starting request to backend {}", destination_url);
+
+    destination_url.as_str().parse().unwrap()
 }
 
 #[cfg(test)]
