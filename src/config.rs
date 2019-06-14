@@ -1,4 +1,3 @@
-use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
@@ -6,6 +5,10 @@ use std::path::PathBuf;
 
 use dirs;
 use hyper::header::{HeaderMap, HeaderName, HeaderValue};
+use serde::{
+    de::{self, Unexpected},
+    Deserialize, Deserializer,
+};
 use toml;
 
 #[derive(Deserialize, Debug)]
@@ -19,14 +22,25 @@ pub struct ProxyConfig {
     pub proxy_port: u16,
 }
 
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub enum CommandConfig {
+    Command(String),
+    Commands(HashMap<String, String>),
+    #[serde(deserialize_with = "true_to_unit")]
+    Procfile,
+}
+
 #[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct App {
     pub name: String,
     pub directory: String,
     pub port: Option<u16>,
-    pub command: String,
     #[serde(default)]
     pub headers: HashMap<String, String>,
+    #[serde(flatten)]
+    pub command_config: CommandConfig,
 }
 
 impl App {
@@ -40,6 +54,13 @@ impl App {
                 (header_name, header_value)
             })
             .collect()
+    }
+
+    pub fn full_path(&self) -> String {
+        match shellexpand::full(&self.directory) {
+            Ok(expanded_path) => expanded_path.to_string(),
+            Err(_) => self.directory.clone(),
+        }
     }
 }
 
@@ -66,6 +87,17 @@ pub fn socket_path() -> PathBuf {
 // This needs to be dynamic to support multiple servers (as does the socket above)
 pub fn tmux_socket() -> String {
     "oxidux".to_string()
+}
+
+fn true_to_unit<'a, D>(deserializer: D) -> Result<(), D::Error>
+where
+    D: Deserializer<'a>,
+{
+    if bool::deserialize(deserializer)? {
+        Ok(())
+    } else {
+        Err(de::Error::invalid_value(Unexpected::Bool(false), &"true"))
+    }
 }
 
 #[cfg(test)]

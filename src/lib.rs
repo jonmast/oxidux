@@ -9,6 +9,7 @@ use tokio_signal;
 
 mod proxy;
 
+mod app;
 mod process;
 mod process_manager;
 use crate::process_manager::ProcessManager;

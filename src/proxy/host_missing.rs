@@ -58,8 +58,8 @@ fn process_list(process_manager: &ProcessManager) -> String {
 
     table.push_str(TABLE_HEADER);
 
-    for process in process_manager.processes.iter() {
-        let status = if process.is_running() {
+    for app in process_manager.apps.iter() {
+        let status = if app.is_running() {
             "Running"
         } else {
             "Stopped"
@@ -67,9 +67,9 @@ fn process_list(process_manager: &ProcessManager) -> String {
 
         table.push_str(&format!(
             "<tr><td><a href=\"http://{}{}\">{}</a></td><td>{}</td></tr>",
-            process.app_name(),
+            app.name(),
             TLD,
-            process.app_name(),
+            app.name(),
             status
         ));
     }

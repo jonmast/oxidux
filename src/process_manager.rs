@@ -1,47 +1,45 @@
+use crate::app::App;
 use crate::config::Config;
-use crate::process::Process;
 
 #[derive(Clone)]
 pub struct ProcessManager {
-    pub processes: Vec<Process>,
+    pub apps: Vec<App>,
 }
 
 const PORT_START: u16 = 7500;
 
 impl ProcessManager {
     pub fn new(config: &Config) -> ProcessManager {
-        let processes = config
+        let apps = config
             .apps
             .iter()
             .enumerate()
             .map(|(idx, process_config)| {
-                Process::from_config(&process_config, PORT_START + (idx as u16))
+                App::from_config(&process_config, PORT_START + (idx as u16))
             })
             .collect();
 
-        ProcessManager { processes }
+        ProcessManager { apps }
     }
 
-    /// Find the process associated with a given hostname
-    pub fn find_process(&self, hostname: &str) -> Option<&Process> {
+    /// Find the app associated with a given hostname
+    pub fn find_app(&self, hostname: &str) -> Option<&App> {
         let parts = hostname.split('.');
         // Penultimate segment should contain app name
         let app_name = parts.rev().nth(1).unwrap_or(hostname);
 
         eprintln!("Looking for app {}", app_name);
-        self.processes
-            .iter()
-            .find(|process| process.app_name() == app_name)
+        self.apps.iter().find(|app| app.name() == app_name)
     }
 
-    pub fn find_process_for_directory(&self, directory: &str) -> Option<&Process> {
-        self.processes
+    pub fn find_app_for_directory(&self, directory: &str) -> Option<&App> {
+        self.apps
             .iter()
-            .find(|process| directory.starts_with(&process.directory()))
+            .find(|app| directory.starts_with(&app.directory()))
     }
 
     pub fn shutdown(&self) {
-        for process in &self.processes {
+        for process in self.apps.iter().map(|app| &app.process) {
             if process.is_running() {
                 process.stop();
             }

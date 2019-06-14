@@ -9,19 +9,18 @@ use url::Url;
 mod autostart_response;
 mod host_missing;
 
-use crate::{config::Config, process::Process, process_manager::ProcessManager};
+use crate::{app::App, config::Config, process_manager::ProcessManager};
 
 const ERROR_MESSAGE: &str = "No response from server";
 
-fn error_response(error: &hyper::Error, process: &Process) -> Response<Body> {
+fn error_response(error: &hyper::Error, app: &App) -> Response<Body> {
     eprintln!("Request to backend failed with error \"{}\"", error);
 
-    if process.is_running() {
+    if app.is_running() {
         let body = Body::from(ERROR_MESSAGE);
         Response::new(body)
     } else {
-        process
-            .start()
+        app.start()
             .unwrap_or_else(|e| eprint!("Failed to auto-start app, got {}", e));
 
         autostart_response::autostart_response()
@@ -65,8 +64,8 @@ fn handle_request(
     eprintln!("Serving request for host {:?}", host);
     eprintln!("Full req URI {}", request.uri());
 
-    let process = match process_manager.find_process(&host) {
-        Some(process) => process.clone(),
+    let app = match process_manager.find_app(&host) {
+        Some(app) => app.clone(),
         None => {
             return Box::new(futures::future::ok(host_missing::missing_host_response(
                 host,
@@ -75,11 +74,11 @@ fn handle_request(
         }
     };
 
-    let destination_url = process_url(&process, request.uri());
+    let destination_url = app_url(&app, request.uri());
     *request.uri_mut() = destination_url;
 
     // Apply header overrides from config
-    request.headers_mut().extend(process.headers());
+    request.headers_mut().extend(app.headers().clone());
 
     Box::new(client.request(request).then(move |result| match result {
         Ok(response) => {
@@ -87,7 +86,7 @@ fn handle_request(
 
             future::ok(response)
         }
-        Err(e) => future::ok(error_response(&e, &process)),
+        Err(e) => future::ok(error_response(&e, &app)),
     }))
 }
 
@@ -96,7 +95,7 @@ fn build_address(config: &Config) -> SocketAddr {
     format!("127.0.0.1:{}", port).parse().unwrap()
 }
 
-fn process_url(process: &Process, request_url: &Uri) -> Uri {
+fn app_url(process: &App, request_url: &Uri) -> Uri {
     let base_url = Url::parse("http://localhost/").unwrap();
 
     let mut destination_url = base_url
