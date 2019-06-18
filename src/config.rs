@@ -11,6 +11,8 @@ use serde::{
 };
 use toml;
 
+use crate::procfile;
+
 #[derive(Deserialize, Debug)]
 pub struct Config {
     pub general: ProxyConfig,
@@ -29,6 +31,19 @@ pub enum CommandConfig {
     Commands(HashMap<String, String>),
     #[serde(deserialize_with = "true_to_unit")]
     Procfile,
+}
+
+impl CommandConfig {
+    pub fn commands(&self, directory: String) -> HashMap<String, String> {
+        match self {
+            CommandConfig::Command(command) => [("app".to_string(), command.clone())]
+                .iter()
+                .cloned()
+                .collect(),
+            CommandConfig::Commands(map) => map.clone(),
+            CommandConfig::Procfile => procfile::parse_procfile_in_dir(directory),
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -61,6 +76,10 @@ impl App {
             Ok(expanded_path) => expanded_path.to_string(),
             Err(_) => self.directory.clone(),
         }
+    }
+
+    pub fn commands(&self) -> HashMap<String, String> {
+        self.command_config.commands(self.full_path())
     }
 }
 

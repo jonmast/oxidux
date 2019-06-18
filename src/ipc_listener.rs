@@ -123,9 +123,10 @@ fn restart_app(
 }
 
 fn lookup_process<'a>(process_manager: &'a ProcessManager, args: &[String]) -> Option<&'a Process> {
+    let app = process_manager.find_app_for_directory(&args[1])?;
+
     match args[0].as_ref() {
-        "" => process_manager.find_app_for_directory(&args[1]),
-        name => process_manager.find_app(name),
+        "" => app.default_process(),
+        name => app.find_process(name),
     }
-    .map(|app| &app.process)
 }

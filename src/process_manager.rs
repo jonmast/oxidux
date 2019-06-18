@@ -39,9 +39,9 @@ impl ProcessManager {
     }
 
     pub fn shutdown(&self) {
-        for process in self.apps.iter().map(|app| &app.process) {
-            if process.is_running() {
-                process.stop();
+        for app in self.apps.iter() {
+            if app.is_running() {
+                app.stop();
             }
         }
     }
@@ -54,24 +54,22 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
-    fn find_process_with_subdomain() {
+    fn find_app_with_subdomain() {
         let app_config = config::App {
             name: "the_app".into(),
             directory: "".into(),
             port: None,
-            command: "".into(),
+            command_config: config::CommandConfig::Command("".to_string()),
             headers: HashMap::default(),
         };
 
-        let process = Process::from_config(&app_config, 0);
-        let process_manager = ProcessManager {
-            processes: vec![process],
-        };
+        let app = App::from_config(&app_config, 0);
+        let process_manager = ProcessManager { apps: vec![app] };
 
         let found_app = process_manager
-            .find_process("subdomain.the_app.test")
-            .expect("Failed to find process by hostname");
+            .find_app("subdomain.the_app.test")
+            .expect("Failed to find app by hostname");
 
-        assert!(found_app.app_name() == "the_app")
+        assert!(found_app.name() == "the_app")
     }
 }

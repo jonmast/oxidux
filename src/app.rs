@@ -8,20 +8,26 @@ pub struct App {
     directory: String,
     command_config: config::CommandConfig,
     headers: hyper::HeaderMap,
-    pub process: Process,
+    processes: Vec<Process>,
 }
 
 impl App {
     pub fn from_config(app_config: &config::App, auto_port: u16) -> Self {
-        let process = Process::from_config(app_config, auto_port);
+        let port = app_config.port.unwrap_or(auto_port);
+
+        let processes = app_config
+            .commands()
+            .into_iter()
+            .map(|(name, command)| Process::from_config(app_config, name, command, port))
+            .collect();
 
         Self {
             name: app_config.name.clone(),
-            port: app_config.port.unwrap_or(auto_port),
+            port,
             command_config: app_config.command_config.clone(),
             directory: app_config.full_path(),
             headers: app_config.parsed_headers(),
-            process,
+            processes,
         }
     }
 
@@ -37,15 +43,36 @@ impl App {
         self.port
     }
 
-    pub fn start(&self) -> Result<(), String> {
-        self.process.start()
+    pub fn start(&self) {
+        for process in &self.processes {
+            process.start().unwrap_or_else(|error| {
+                eprint!(
+                    "Process {} failed to start with error: {}",
+                    process.name(),
+                    error
+                )
+            })
+        }
+    }
+
+    pub fn stop(&self) {
+        for process in &self.processes {
+            process.stop()
+        }
     }
 
     pub fn is_running(&self) -> bool {
-        self.process.is_running()
+        self.processes.iter().any(|process| process.is_running())
     }
 
     pub fn headers(&self) -> &hyper::HeaderMap {
         &self.headers
+    }
+
+    pub fn default_process(&self) -> Option<&Process> {
+        self.processes.first()
+    }
+    pub fn find_process(&self, name: &str) -> Option<&Process> {
+        self.processes.iter().find(|process| process.name() == name)
     }
 }

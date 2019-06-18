@@ -20,6 +20,7 @@ pub mod ipc_command;
 mod ipc_listener;
 mod ipc_response;
 mod output;
+mod procfile;
 
 fn ctrlc_listener(process_manager: ProcessManager) -> impl Future<Item = (), Error = ()> {
     let (tx, rx) = oneshot::channel::<()>();

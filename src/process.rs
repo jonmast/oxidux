@@ -26,6 +26,7 @@ pub struct Process {
 
 struct Inner {
     app_name: String,
+    process_name: String,
     port: u16,
     command: String,
     directory: String,
@@ -34,11 +35,17 @@ struct Inner {
 }
 
 impl Process {
-    pub fn from_config(app_config: &config::App, auto_port: u16) -> Self {
+    pub fn from_config(
+        app_config: &config::App,
+        process_name: String,
+        command: String,
+        port: u16,
+    ) -> Self {
         let data = Inner {
             app_name: app_config.name.clone(),
-            port: app_config.port.unwrap_or(auto_port),
-            command: "FIXME".to_string(),
+            process_name,
+            port,
+            command: command.to_string(),
             directory: expand_path(&app_config.directory),
             pid: None,
             restart_pending: false,
@@ -300,6 +307,10 @@ impl Process {
             .map_err(|_| eprintln!("Error in process watcher loop"));
 
         tokio::spawn(watcher);
+    }
+
+    pub fn name(&self) -> String {
+        format!("{}.{}", self.inner().app_name, self.inner().process_name)
     }
 }
 

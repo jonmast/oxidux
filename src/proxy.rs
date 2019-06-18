@@ -20,8 +20,7 @@ fn error_response(error: &hyper::Error, app: &App) -> Response<Body> {
         let body = Body::from(ERROR_MESSAGE);
         Response::new(body)
     } else {
-        app.start()
-            .unwrap_or_else(|e| eprint!("Failed to auto-start app, got {}", e));
+        app.start();
 
         autostart_response::autostart_response()
     }

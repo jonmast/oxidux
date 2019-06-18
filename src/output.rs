@@ -15,7 +15,7 @@ impl Output {
         let index = process.port();
         let stream = FramedRead::new(fifo, LinesCodec::new());
 
-        let name = pick_color(index).paint(process.app_name()).to_string();
+        let name = pick_color(index).paint(process.name()).to_string();
 
         let output = Output { name, process };
 
