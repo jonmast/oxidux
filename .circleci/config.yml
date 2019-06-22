@@ -34,8 +34,7 @@ jobs:
             cargo build --release
 
       - store_artifacts:
-          prefix: target/release
-          path: oxidux
+          path: target/release/oxidux
 
       - save_cache:
           paths:
