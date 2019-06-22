@@ -6,6 +6,15 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Calculate dependencies
+          command: cargo generate-lockfile
+
+      - restore_cache:
+          keys:
+            - cargo-dependencies-{{ checksum "Cargo.lock" }}
+            - cargo-dependencies
+
+      - run:
           name: Check code style
           command: |
             rustup component add clippy
@@ -23,6 +32,10 @@ jobs:
           name: Compile binary
           command: |
             cargo build --release
+
       - store_artifacts:
           prefix: target/release
           path: oxidux
+
+      - save_cache:
+          key: cargo-dependencies-{{ checksum "Cargo.lock" }}
