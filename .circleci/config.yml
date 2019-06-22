@@ -19,3 +19,10 @@ jobs:
           name: Run tests
           command: |
             cargo test
+      - run:
+          name: Compile binary
+          command: |
+            cargo build --release
+      - store_artifacts:
+        prefix: target/release
+        path: oxidux
