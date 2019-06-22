@@ -8,6 +8,7 @@ jobs:
       - run:
           name: Check code formatting
           command: |
+            rustup component add clippy
             cargo clippy
       - run:
           name: Run tests
