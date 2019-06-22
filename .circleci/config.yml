@@ -38,4 +38,7 @@ jobs:
           path: oxidux
 
       - save_cache:
+          paths:
+            - /usr/local/cargo/registry
+            - target
           key: cargo-dependencies-{{ checksum "Cargo.lock" }}
