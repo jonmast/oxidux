@@ -6,8 +6,10 @@ jobs:
     steps:
       - checkout
       - run:
-        name: Code formatting
-        command: cargo clippy
+        name: Check code formatting
+        command: |
+          cargo clippy
       - run:
-        name: Tests
-        command: cargo test
+        name: Run tests
+        command: |
+          cargo test
