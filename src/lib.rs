@@ -47,7 +47,19 @@ fn ctrlc_listener(process_manager: ProcessManager) -> impl Future<Item = (), Err
         .and_then(|_| Ok(()))
 }
 
+fn server_running() -> bool {
+    if let Ok(response) = ipc_command::ping_server() {
+        response == "pong"
+    } else {
+        false
+    }
+}
+
 pub fn run_server(config: Config) {
+    if server_running() {
+        return eprint!("Error: server is already running");
+    }
+
     let mut runtime = Runtime::new().unwrap();
     runtime
         .block_on(future::lazy(move || {

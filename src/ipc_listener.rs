@@ -46,9 +46,11 @@ fn run_command(
     match command.command.as_ref() {
         "restart" => restart_app(process_manager, command, writer),
         "connect" => connect_output(process_manager, command, writer),
+        "ping" => heartbeat_response(writer),
         cmd_str => eprintln!("Unknown command {}", cmd_str),
     }
 }
+
 fn parse_incoming_command(buf: &[u8]) -> Result<IPCCommand, Error> {
     let raw_json = str::from_utf8(&buf)?;
 
@@ -129,4 +131,11 @@ fn lookup_process<'a>(process_manager: &'a ProcessManager, args: &[String]) -> O
         "" => app.default_process(),
         name => app.find_process(name),
     }
+}
+
+fn heartbeat_response(mut writer: WriteHalf<UnixStream>) {
+    writer
+        .write_all(b"pong")
+        .map_err(|_| eprintln!("Failed to send heartbeat response"))
+        .unwrap();
 }
