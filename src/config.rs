@@ -41,7 +41,7 @@ impl CommandConfig {
                 .cloned()
                 .collect(),
             CommandConfig::Commands(map) => map.clone(),
-            CommandConfig::Procfile => procfile::parse_procfile_in_dir(directory),
+            CommandConfig::Procfile => procfile::parse_procfile_in_dir(&directory),
         }
     }
 }
