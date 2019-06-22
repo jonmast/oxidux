@@ -1,0 +1,13 @@
+version: 2.0
+jobs:
+  build:
+    docker:
+      - image: circleci/rust:latest
+    steps:
+      - checkout
+      - run:
+        name: Code formatting
+        command: cargo clippy
+      - run:
+        name: Tests
+        command: cargo test
