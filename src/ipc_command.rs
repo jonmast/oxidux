@@ -1,4 +1,4 @@
-use std::{io::prelude::*, os::unix::net::UnixStream};
+use std::{io::prelude::*, os::unix::net::UnixStream, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
@@ -35,6 +35,12 @@ impl IPCCommand {
 
 pub fn ping_server() -> Result<String, failure::Error> {
     let mut socket = UnixStream::connect(config::socket_path())?;
+
+    // Ensure we don't hang indefinitely
+    let timeout = Some(Duration::from_secs(1));
+    socket.set_read_timeout(timeout)?;
+    socket.set_write_timeout(timeout)?;
+
     let command = IPCCommand::heartbeat_command();
     serde_json::to_writer(&socket, &command)?;
     socket.write_all(b"\n")?;
