@@ -310,7 +310,9 @@ impl Process {
     }
 
     pub fn name(&self) -> String {
-        format!("{}.{}", self.inner().app_name, self.inner().process_name)
+        let inner = self.inner();
+
+        format!("{}.{}", inner.app_name, inner.process_name)
     }
 }
 
