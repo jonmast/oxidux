@@ -14,6 +14,11 @@ os:
 matrix:
   allow_failures:
     - rust: nightly
+  exclude:
+  - os: osx
+    rust: beta
+  - os: osx
+    rust: nightly
 
 before_script:
   - rustup component add clippy
@@ -22,4 +27,5 @@ before_script:
 script:
   - cargo clippy
   - cargo fmt -- --check
+  - cargo test
   - cargo build --release
