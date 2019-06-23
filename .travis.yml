@@ -17,17 +17,22 @@ matrix:
   - os: osx
     rust: nightly
 
-before_script:
-  - '[[ $TRAVIS_RUST_VERSION != "nightly" ]] && rustup component add clippy'
-  - '[[ $TRAVIS_RUST_VERSION != "nightly" ]] && rustup component add rustfmt'
+before_script: |
+  if [[ $TRAVIS_RUST_VERSION != "nightly" ]]; then
+    rustup component add clippy
+    rustup component add rustfmt
+  fi
 
-script:
-  - '[[ $TRAVIS_RUST_VERSION != "nightly" ]] && cargo clippy'
-  - '[[ $TRAVIS_RUST_VERSION != "nightly" ]] && cargo fmt -- --check'
-  - cargo test
+script: |
+  if [[ $TRAVIS_RUST_VERSION != "nightly" ]]; then
+    cargo clippy
+    cargo fmt -- --check
+  fi
+
+  cargo test
 
 before_deploy:
-  - '[[ $TRAVIS_RUST_VERSION == "stable" ]] && cargo build --release'
+  - 'cargo build --release'
 
 deploy:
   provider: releases
