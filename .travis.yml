@@ -3,17 +3,14 @@ rust:
   - stable
   - beta
   - nightly
-
 cache: cargo
-
 os:
   - linux
   - osx
 
-
 matrix:
   allow_failures:
-    - rust: nightly
+  - rust: nightly
   exclude:
   - os: osx
     rust: beta
@@ -21,11 +18,22 @@ matrix:
     rust: nightly
 
 before_script:
-  - rustup component add clippy
-  - rustup component add rustfmt
-
-script:
-  - cargo clippy
-  - cargo fmt -- --check
+  - '[[ $TRAVIS_RUST_VERSION != "nightly" ]] && rustup component add clippy'
+  - '[[ $TRAVIS_RUST_VERSION != "nightly" ]] && rustup component add rustfmt'
+  script:
+  - '[[ $TRAVIS_RUST_VERSION != "nightly" ]] && cargo clippy'
+  - '[[ $TRAVIS_RUST_VERSION != "nightly" ]] && cargo fmt -- --check'
   - cargo test
-  - cargo build --release
+
+before_deploy:
+  - '[[ $TRAVIS_RUST_VERSION == "stable" ]] && cargo build --release'
+
+deploy:
+  provider: releases
+  api_key:
+    secure: iuHZgX4U31ihFm09WPshPpw8srI5pW7E1Ec9SR4jVBg0TFEWkR6rrrD6HrQMOtmeWyX29rIpl402uYSaSOdCTfHzmiXkZCG9HZIWDe1wHo/Oh/bngrGQSsPWw9s7AfR/j/vM69jb5y5qFZyltzTPdvf8uWiXfT4bJpLdXY/4wNmGCgfpy7F8gavkwQbcrb5SMVOUQNGcOekFwpcDHG4q4jFMQsC+9VAScDJ0t6j1weTldnwxyFEDniFg6erz+H3Yb/RjCovAf63nfmdHMO1ZRLG1TGyIIoe/4iqGxGaWfsoEY6oVZ5BmW0bm01VCXrRzkXwtjAY0WK6c2ybVbZ3w0I1xf0FrcNHBIveNcAlwAuXtnpjm2OAUvhTyVqBor6VDPHZMLGAjg0PGEHJTfpWz1rl28IpgTDEIXVjc2z5I2h9pg6PBMULVXSOprwz/eJnTaldnRsIjkkzeiSW53ieZ+PJWyuZVC25QLMjdZIlgczFmffKtclV7XfMfqMsKWg9P+WPBUMEmoLCnqPPtRGo/J6BEkEQdB6m8gy0PAUogDOyS8qJFjDq8fE5LREkjwySK4IfS3fEEUfaFORwwLwZzeOTw5Eh3GnYLgslpd6Og2sILxOWeNP23s5CV/0PPBWrAM4AoqSNXqQxRRM1nH2GR4TyO3RXRCkLGeQUzYse27wE=
+  file: target/release/oxidux
+  on:
+    repo: jonmast/oxidux
+    tags: true
+    condition: '$TRAVIS_RUST_VERSION == "stable"'
