@@ -46,5 +46,5 @@ deploy:
   skip_cleanup: true
   on:
     repo: jonmast/oxidux
-    # tags: true
+    tags: true
     condition: '$TRAVIS_RUST_VERSION == "stable"'
