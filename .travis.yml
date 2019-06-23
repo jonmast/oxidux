@@ -20,7 +20,8 @@ matrix:
 before_script:
   - '[[ $TRAVIS_RUST_VERSION != "nightly" ]] && rustup component add clippy'
   - '[[ $TRAVIS_RUST_VERSION != "nightly" ]] && rustup component add rustfmt'
-  script:
+
+script:
   - '[[ $TRAVIS_RUST_VERSION != "nightly" ]] && cargo clippy'
   - '[[ $TRAVIS_RUST_VERSION != "nightly" ]] && cargo fmt -- --check'
   - cargo test
