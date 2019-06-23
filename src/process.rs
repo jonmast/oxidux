@@ -257,7 +257,7 @@ impl Process {
     }
 
     pub fn tmux_session(&self) -> String {
-        self.app_name()
+        self.name()
     }
 
     pub fn port(&self) -> u16 {
@@ -312,7 +312,11 @@ impl Process {
     pub fn name(&self) -> String {
         let inner = self.inner();
 
-        format!("{}.{}", inner.app_name, inner.process_name)
+        format!("{}/{}", inner.app_name, inner.process_name)
+    }
+
+    pub fn process_name(&self) -> String {
+        self.inner().process_name.clone()
     }
 }
 

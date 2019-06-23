@@ -73,6 +73,8 @@ impl App {
         self.processes.first()
     }
     pub fn find_process(&self, name: &str) -> Option<&Process> {
-        self.processes.iter().find(|process| process.name() == name)
+        self.processes
+            .iter()
+            .find(|process| process.process_name() == name)
     }
 }
