@@ -1,7 +1,9 @@
 [package]
 name = "oxidux"
+description = "Reverse proxy and process manager for web app development."
 version = "0.2.1"
 authors = ["Jonathan Mast <jon@jonmast.com>"]
+license = "GPL-3.0-or-later"
 edition="2018"
 
 [dependencies]
