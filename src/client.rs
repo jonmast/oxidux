@@ -42,6 +42,7 @@ fn send_command(command: &IPCCommand) -> EmptyResult {
         } => {
             println!("Connecting tmux");
             let status = Command::new("tmux")
+                .env_remove("TMUX")
                 .args(&["-L", &tmux_socket])
                 .args(&["attach-session", "-t", &tmux_session])
                 .status()?;
