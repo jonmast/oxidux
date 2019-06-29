@@ -63,7 +63,7 @@ pub fn start_ipc_sock(process_manager: ProcessManager) {
     let path = config::socket_path();
     fs::remove_file(&path).ok();
 
-    let sock = UnixListener::bind(&path).expect("Failed to open socket");
+    let sock = UnixListener::bind(&path).expect("Failed to create IPC socket");
 
     let listener = sock
         .incoming()
@@ -72,7 +72,7 @@ pub fn start_ipc_sock(process_manager: ProcessManager) {
 
             Ok(())
         })
-        .map_err(|err| eprintln!("Failed to open socket, got error {:?}", err));
+        .map_err(|err| eprintln!("Failed to read from IPC socket, got error {:?}", err));
 
     tokio::spawn(listener);
 }

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fs::File;
+use std::fs::{create_dir, File};
 use std::io::prelude::*;
 use std::path::PathBuf;
 
@@ -96,7 +96,13 @@ pub fn read_config(file_name: &str) -> Config {
 pub fn config_dir() -> PathBuf {
     let home_dir = dirs::home_dir().expect("Couldn't determine home directory");
 
-    home_dir.join(".oxidux")
+    let dir = home_dir.join(".oxidux");
+
+    if !dir.is_dir() {
+        create_dir(&dir).expect("Error creating config directory");
+    }
+
+    dir
 }
 
 pub fn socket_path() -> PathBuf {
