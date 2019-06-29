@@ -17,6 +17,17 @@ for your platform and place it in your PATH.
 You'll also need:
 - A server (like Apache) running on port 80 to proxy to oxidux. Support for
   binding directly to port 80 may be added in the future.
+  Example config for Apache:
+  ```apache
+  <VirtualHost *:80>
+    ServerName oxidux.test
+    ServerAlias *.test
+    ProxyPass "/"  "http://localhost:8080/"
+    ProxyPreserveHost On
+    ProxyTimeout 600
+    ErrorDocument 503 "Oxidux is not running :("
+  </VirtualHost>
+  ```
 - DNS resolution for the `.test` TLD.
   - For Linux the [dev-tld-resolver](https://github.com/puma/dev-tld-resolver)
     tool is recommended, add `test` to the `DEV_TLD_DOMAINS` environment
@@ -37,14 +48,22 @@ You'll also need:
 proxy_port = 8080
 
 [[apps]]
-directory = "/path/to/app/"
 # Name is used when proxying requests, this app will be available at app.test
-name = "bar"
-# Command to launch app process
-# port is passed in as an environment variable
+name = "first-app"
+# Root directory of app
+directory = "/path/to/app/"
+# Commands to start app processes
+# dynamically generated port is passed in as an environment variable
 commands = { app = "scripts/server -p $PORT" }
-# Alternatively, a Procfile can be used instead of specifying the commands
+
+# Another app, with different config options
+[[apps]]
+name = "second-app"
+directory = "/path/to/app/"
+# A Procfile can be used instead of specifying the commands
 procfile = true
+# If the app cannot run on a dynamic port it can be set explicitly here
+port = 3000
 ```
 
 ## Usage
