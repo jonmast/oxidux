@@ -92,3 +92,6 @@ oxidux connect web
 
 Connects to the Tmux session for a given process. If the process name is omitted
 the first process for the app will be used.
+
+## License
+Licensed under GPL version 3 or later, see [LICENSE](LICENSE.md).
