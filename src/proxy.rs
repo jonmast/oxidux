@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::net::{SocketAddr, TcpListener};
 
 use futures::future::{self, Future};
 use hyper::{
@@ -31,8 +31,7 @@ pub fn start_server(
     process_manager: ProcessManager,
     shutdown_handler: impl Future,
 ) -> impl Future<Item = (), Error = ()> {
-    let mut listenfd = listenfd::ListenFd::from_env();
-    let (addr, server) = if let Some(listener) = listenfd.take_tcp_listener(0).unwrap() {
+    let (addr, server) = if let Ok(listener) = get_activation_socket() {
         let addr = listener.local_addr().unwrap();
         (addr, Server::from_tcp(listener).unwrap())
     } else {
@@ -52,6 +51,23 @@ pub fn start_server(
         .serve(proxy)
         .with_graceful_shutdown(shutdown_handler.and_then(|_| Ok(())))
         .map_err(|err| eprintln!("serve error: {:?}", err))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn get_activation_socket() -> Result<TcpListener, failure::Error> {
+    let mut listenfd = listenfd::ListenFd::from_env();
+    listenfd
+        .take_tcp_listener(0)?
+        .ok_or_else(|| failure::err_msg("No socket provided"))
+}
+
+#[cfg(target_os = "macos")]
+mod launchd;
+#[cfg(target_os = "macos")]
+fn get_activation_socket() -> Result<TcpListener, failure::Error> {
+    let result = launchd::get_activation_socket("HttpSocket");
+
+    result.map_err(|e| e.into())
 }
 
 fn handle_request(

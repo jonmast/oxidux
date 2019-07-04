@@ -28,6 +28,7 @@ shellexpand = "1.0"
 failure = "0.1.5"
 listenfd = "0.3.3"
 regex = "1"
+libc = "0.2"
 
 [dev-dependencies]
 rand = "0.6.5"
