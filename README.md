@@ -11,10 +11,21 @@ edges.
 
 ## Installation
 
-Download the [latest release](https://github.com/jonmast/oxidux/releases/latest)
-for your platform and place it in your PATH.
+**HomeBrew or LinuxBrew**:
+```sh
+brew tap jonmast/oxidux https://github.com/jonmast/oxidux.git
+brew install oxidux
+```
+
+**Manual**: Download the [latest
+release](https://github.com/jonmast/oxidux/releases/latest) for your platform
+and place it in your PATH.
+
+**Note**: Windows isn't supported at this time, but I'm happy to assist if
+someone wants to work on porting it.
 
 You'll also need:
+- Tmux - all apps are run within a tmux session.
 - A server (like Apache) running on port 80 to proxy to oxidux. Support for
   binding directly to port 80 may be added in the future.
   Example config for Apache:
