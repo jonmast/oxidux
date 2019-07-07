@@ -15,7 +15,11 @@ impl ProcessManager {
             .iter()
             .enumerate()
             .map(|(idx, process_config)| {
-                App::from_config(&process_config, PORT_START + (idx as u16))
+                App::from_config(
+                    &process_config,
+                    PORT_START + (idx as u16),
+                    config.general.domain.clone(),
+                )
             })
             .collect();
 
@@ -63,7 +67,7 @@ mod tests {
             headers: HashMap::default(),
         };
 
-        let app = App::from_config(&app_config, 0);
+        let app = App::from_config(&app_config, 0, "test".to_string());
         let process_manager = ProcessManager { apps: vec![app] };
 
         let found_app = process_manager

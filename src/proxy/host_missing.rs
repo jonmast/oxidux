@@ -50,9 +50,6 @@ const TABLE_HEADER: &str = "
     </thead>
 ";
 
-// TODO: this should be configurable
-const TLD: &str = ".test";
-
 fn process_list(process_manager: &ProcessManager) -> String {
     let mut table = String::new();
 
@@ -66,9 +63,9 @@ fn process_list(process_manager: &ProcessManager) -> String {
         };
 
         table.push_str(&format!(
-            "<tr><td><a href=\"http://{}{}\">{}</a></td><td>{}</td></tr>",
+            "<tr><td><a href=\"http://{}.{}\">{}</a></td><td>{}</td></tr>",
             app.name(),
-            TLD,
+            app.tld(),
             app.name(),
             status
         ));

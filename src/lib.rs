@@ -16,6 +16,8 @@ use crate::process_manager::ProcessManager;
 pub mod config;
 use crate::config::Config;
 pub mod client;
+#[cfg(target_os = "macos")]
+mod dns;
 pub mod ipc_command;
 mod ipc_listener;
 mod ipc_response;
@@ -68,6 +70,10 @@ pub fn run_server(config: Config) {
             let shutdown_rx = ctrlc_listener(process_manager.clone());
 
             ipc_listener::start_ipc_sock(process_manager.clone());
+
+            #[cfg(target_os = "macos")]
+            dns::start_dns_server(config.general.dns_port, &config.general.domain)
+                .expect("Failed to start DNS server");
 
             proxy::start_server(&config, process_manager, shutdown_rx.and_then(|_| Ok(())))
         }))

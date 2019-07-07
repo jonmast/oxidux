@@ -9,10 +9,11 @@ pub struct App {
     command_config: config::CommandConfig,
     headers: hyper::HeaderMap,
     processes: Vec<Process>,
+    tld: String,
 }
 
 impl App {
-    pub fn from_config(app_config: &config::App, auto_port: u16) -> Self {
+    pub fn from_config(app_config: &config::App, auto_port: u16, tld: String) -> Self {
         let port = app_config.port.unwrap_or(auto_port);
 
         let processes = app_config
@@ -28,6 +29,7 @@ impl App {
             directory: app_config.full_path(),
             headers: app_config.parsed_headers(),
             processes,
+            tld,
         }
     }
 
@@ -76,5 +78,9 @@ impl App {
         self.processes
             .iter()
             .find(|process| process.process_name() == name)
+    }
+
+    pub fn tld(&self) -> &str {
+        &self.tld
     }
 }

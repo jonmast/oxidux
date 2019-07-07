@@ -19,9 +19,21 @@ pub struct Config {
     pub apps: Vec<App>,
 }
 
-#[derive(Deserialize, Debug)]
+fn default_dns_port() -> u16 {
+    6153
+}
+
+fn default_domain() -> String {
+    "test".to_string()
+}
+
+#[derive(Deserialize, Debug, Default)]
 pub struct ProxyConfig {
     pub proxy_port: u16,
+    #[serde(default = "default_dns_port")]
+    pub dns_port: u16,
+    #[serde(default = "default_domain")]
+    pub domain: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]

@@ -133,7 +133,10 @@ mod tests {
     fn build_bind_address_from_config() {
         let config = config::Config {
             apps: Vec::new(),
-            general: config::ProxyConfig { proxy_port: 80 },
+            general: config::ProxyConfig {
+                proxy_port: 80,
+                ..Default::default()
+            },
         };
 
         let addr = build_address(&config);
