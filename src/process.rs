@@ -250,6 +250,7 @@ impl Process {
             .args(&["-d", "-P", "-F", "#{pane_pid}"])
             .args(&self.shell_args())
             .args(&[";", "set", "remain-on-exit", "on"])
+            .args(&[";", "set", "mouse", "on"])
             .args(&[";", "set", "status-right", "Press C-x to disconnect"])
             .args(&[";", "bind-key", "-n", "C-x", "detach-client"]);
 
