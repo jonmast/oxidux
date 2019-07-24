@@ -145,4 +145,21 @@ mod tests {
         let localhost: std::net::IpAddr = "127.0.0.1".parse().unwrap();
         assert_eq!(addr.ip(), localhost);
     }
+
+    #[test]
+    fn app_url_test() {
+        let config = config::App {
+            name: "testapp".to_string(),
+            command_config: config::CommandConfig::Procfile,
+            directory: "".to_string(),
+            port: Some(42),
+            headers: Default::default(),
+        };
+        let app = App::from_config(&config, 0, "test".to_string());
+        let source_uri = "http://testapp.test/path?query=true".parse().unwrap();
+
+        let result = app_url(&app, &source_uri);
+
+        assert_eq!(result, "http://localhost:42/path?query=true")
+    }
 }
