@@ -74,7 +74,7 @@ fn handle_request(
     mut request: Request<Body>,
     client: &Client<HttpConnector>,
     process_manager: &ProcessManager,
-) -> Box<future::Future<Item = Response<Body>, Error = hyper::Error> + Send> {
+) -> Box<dyn future::Future<Item = Response<Body>, Error = hyper::Error> + Send> {
     let host = request.headers().get("HOST").unwrap().to_str().unwrap();
     eprintln!("Serving request for host {:?}", host);
     eprintln!("Full req URI {}", request.uri());
