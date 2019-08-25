@@ -2,16 +2,14 @@ use crate::config;
 use crate::ipc_command::IPCCommand;
 
 use failure::{err_msg, Error};
-use futures::future::Future;
-use futures::Stream;
+use futures::future;
 use serde_json;
 use std::fs;
-use std::io::{BufReader, Write};
 use std::str;
 use tokio;
-use tokio_io::io::WriteHalf;
-use tokio_io::AsyncRead;
-use tokio_uds::{UnixListener, UnixStream};
+use tokio::io::{AsyncWriteExt, BufReader};
+use tokio::net::{UnixListener, UnixStream};
+use tokio::prelude::*;
 
 use crate::ipc_response::IPCResponse;
 use crate::process::Process;
@@ -19,34 +17,29 @@ use crate::process_manager::ProcessManager;
 
 fn read_command(process_manager: &ProcessManager, connection: UnixStream) {
     let (reader, writer) = connection.split();
-    let reader = BufReader::new(reader);
-    let msg = vec![];
+    let mut msg = vec![];
 
     let process_manager = process_manager.clone();
 
-    tokio::spawn(
-        tokio::io::read_until(reader, b'\n', msg)
-            .and_then(move |(_, buf)| {
-                let command = parse_incoming_command(&buf)
-                    .expect("Failed to parse command, is it valid JSON?");
+    let mut reader = BufReader::new(reader);
 
-                run_command(&process_manager, &command, writer);
+    tokio::spawn(async move {
+        reader.read_until(b'\n', &mut msg).await.unwrap();
+        let command =
+            parse_incoming_command(&msg).expect("Failed to parse command, is it valid JSON?");
 
-                Ok(())
-            })
-            .map_err(|e| eprintln!("Got error reading command {}", e)),
-    );
+        run_command(&process_manager, &command, writer).await;
+    });
 }
 
-fn run_command(
-    process_manager: &ProcessManager,
-    command: &IPCCommand,
-    writer: WriteHalf<UnixStream>,
-) {
+async fn run_command<T>(process_manager: &ProcessManager, command: &IPCCommand, writer: T)
+where
+    T: AsyncWrite + Unpin,
+{
     match command.command.as_ref() {
-        "restart" => restart_app(process_manager, command, writer),
-        "connect" => connect_output(process_manager, command, writer),
-        "ping" => heartbeat_response(writer),
+        "restart" => restart_app(process_manager, command, writer).await,
+        "connect" => connect_output(process_manager, command, writer).await,
+        "ping" => heartbeat_response(writer).await,
         cmd_str => eprintln!("Unknown command {}", cmd_str),
     }
 }
@@ -65,56 +58,56 @@ pub fn start_ipc_sock(process_manager: ProcessManager) {
 
     let sock = UnixListener::bind(&path).expect("Failed to create IPC socket");
 
-    let listener = sock
-        .incoming()
-        .for_each(move |connection| {
-            read_command(&process_manager.clone(), connection);
+    let listener = sock.incoming().for_each(move |connection| {
+        read_command(&process_manager.clone(), connection.unwrap());
 
-            Ok(())
-        })
-        .map_err(|err| eprintln!("Failed to read from IPC socket, got error {:?}", err));
+        future::ready(())
+    });
+    // .map_err(|err| eprintln!("Failed to read from IPC socket, got error {:?}", err));
 
     tokio::spawn(listener);
 }
 
-fn send_response(process: Result<&Process, Error>, mut writer: WriteHalf<UnixStream>) {
+async fn send_response<T>(process: Result<&Process, Error>, mut writer: T)
+where
+    T: AsyncWrite + Unpin,
+{
     let response = IPCResponse::for_process(process);
 
     let json = serde_json::to_string(&response).unwrap();
-    writer
-        .write_all(&json.as_ref())
-        .map_err(|_| eprintln!("Error writing IPC response"))
-        .unwrap();
+    writer.write_all(&json.as_ref()).await.unwrap();
 }
 
-fn connect_output(
+async fn connect_output(
     process_manager: &ProcessManager,
     command: &IPCCommand,
-    writer: WriteHalf<UnixStream>,
+    writer: impl AsyncWrite + Unpin,
 ) {
     let process = lookup_process(process_manager, &command.args);
 
     send_response(
         process.ok_or_else(|| err_msg("Failed to find app to connect to")),
         writer,
-    );
+    )
+    .await;
 
     if process.is_none() {
         eprintln!("Failed to find app to connect to");
     }
 }
 
-fn restart_app(
+async fn restart_app(
     process_manager: &ProcessManager,
     command: &IPCCommand,
-    writer: WriteHalf<UnixStream>,
+    writer: impl AsyncWrite + Unpin,
 ) {
     let process = lookup_process(&process_manager, &command.args);
 
     send_response(
         process.ok_or_else(|| err_msg("Failed to find app to restart")),
         writer,
-    );
+    )
+    .await;
 
     match process {
         Some(process) => {
@@ -133,9 +126,9 @@ fn lookup_process<'a>(process_manager: &'a ProcessManager, args: &[String]) -> O
     }
 }
 
-fn heartbeat_response(mut writer: WriteHalf<UnixStream>) {
+async fn heartbeat_response(mut writer: impl AsyncWrite + Unpin) {
     writer
         .write_all(b"pong")
-        .map_err(|_| eprintln!("Failed to send heartbeat response"))
-        .unwrap();
+        .await
+        .expect("Failed to send heartbeat response")
 }

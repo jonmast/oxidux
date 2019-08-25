@@ -6,16 +6,17 @@ authors = ["Jonathan Mast <jon@jonmast.com>"]
 license = "GPL-3.0-or-later"
 edition="2018"
 
+[package.metadata.release]
+tag-prefix = "v"
+sign-commit = true
+
 [dependencies]
-futures = "0.1.14"
-tokio = "0.1"
-tokio-core = "0.1"
-tokio-io = "0.1"
-tokio-process = "0.2.2"
-tokio-uds = "0.2.1"
-tokio-codec = "0.1"
-tokio-signal = "0.2.7"
-hyper = "0.12.0"
+# Legacy crate
+# futures01 = "0.1.14"
+futures-preview = { version = "0.3.0-alpha.18" }
+tokio = { version = "=0.2.0-alpha.2" }
+hyper = { git = "https://github.com/hyperium/hyper" }
+tokio-net = { version = "=0.2.0-alpha.2", features = ["signal"] }
 url = "2.0.0"
 toml = "0.5"
 serde = { version = "1.0", features = ["derive"] }
@@ -36,7 +37,3 @@ trust-dns = "0.16.1"
 
 [dev-dependencies]
 rand = "0.7.0"
-
-[package.metadata.release]
-tag-prefix = "v"
-sign-commit = true

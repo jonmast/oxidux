@@ -1,11 +1,11 @@
 #![warn(clippy::all)]
+#![feature(async_await)]
 
-use futures::future::{self, Future};
-use futures::sync::oneshot;
+use tokio::sync::oneshot;
 
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
-use tokio_signal;
+use tokio_net::signal;
 
 mod proxy;
 
@@ -16,20 +16,21 @@ use crate::process_manager::ProcessManager;
 pub mod config;
 use crate::config::Config;
 pub mod client;
-#[cfg(target_os = "macos")]
-mod dns;
+// #[cfg(target_os = "macos")]
+// mod dns;
 pub mod ipc_command;
 mod ipc_listener;
 mod ipc_response;
 mod output;
 mod procfile;
 
-fn ctrlc_listener(process_manager: ProcessManager) -> impl Future<Item = (), Error = ()> {
+async fn ctrlc_listener(process_manager: ProcessManager) {
     let (tx, rx) = oneshot::channel::<()>();
 
     let mut shutdown_tx = Some(tx);
 
-    let signal_handler = tokio_signal::ctrl_c().flatten_stream().for_each(move |()| {
+    let ctrl_c = signal::CtrlC::new().unwrap();
+    let signal_handler = ctrl_c.for_each(move |()| {
         if let Some(tx) = shutdown_tx.take() {
             eprintln!("Gracefully shutting down");
 
@@ -41,12 +42,11 @@ fn ctrlc_listener(process_manager: ProcessManager) -> impl Future<Item = (), Err
             std::process::exit(1);
         }
 
-        Ok(())
+        tokio::future::ready(())
     });
-    tokio::spawn(signal_handler.map_err(|err| eprintln!("Error in signal handler {}", err)));
+    tokio::spawn(signal_handler);
 
-    rx.map_err(|_| eprintln!("Error in shutdown channel"))
-        .and_then(|_| Ok(()))
+    rx.await.ok();
 }
 
 fn server_running() -> bool {
@@ -62,22 +62,21 @@ pub fn run_server(config: Config) {
         return eprint!("Error: server is already running");
     }
 
-    let mut runtime = Runtime::new().unwrap();
-    runtime
-        .block_on(future::lazy(move || {
-            let process_manager = ProcessManager::new(&config);
+    let runtime = Runtime::new().unwrap();
+    runtime.block_on(async {
+        let process_manager = ProcessManager::new(&config);
 
-            let shutdown_rx = ctrlc_listener(process_manager.clone());
+        let shutdown_rx = ctrlc_listener(process_manager.clone());
 
-            ipc_listener::start_ipc_sock(process_manager.clone());
+        ipc_listener::start_ipc_sock(process_manager.clone());
 
-            #[cfg(target_os = "macos")]
-            dns::start_dns_server(config.general.dns_port, &config.general.domain)
-                .expect("Failed to start DNS server");
+        // #[cfg(target_os = "macos")]
+        // dns::start_dns_server(config.general.dns_port, &config.general.domain)
+        //     .expect("Failed to start DNS server");
 
-            proxy::start_server(&config, process_manager, shutdown_rx.and_then(|_| Ok(())))
-        }))
-        .unwrap();
+        println!("Spinning up server");
+        proxy::start_server(config, process_manager, shutdown_rx).await
+    });
 
     runtime.shutdown_now();
 }

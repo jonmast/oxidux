@@ -12,6 +12,7 @@ use nix::unistd::{self, Pid};
 
 use shellexpand;
 use tokio::fs::File;
+use tokio::future;
 
 use crate::config;
 use crate::output::Output;
@@ -98,8 +99,7 @@ impl Process {
             .output()?
             .stdout;
 
-        let pid = pids
-            .lines()
+        let pid = BufRead::lines(&pids[..])
             .find_map(|line| match line {
                 Err(_) => None,
                 Ok(line) => {
@@ -298,14 +298,13 @@ impl Process {
                         println!("Process died");
                         process.process_died();
 
-                        return Ok(false);
+                        return future::ready(false);
                     }
                 }
 
-                Ok(true)
+                future::ready(true)
             })
-            .for_each(|_| Ok(()))
-            .map_err(|_| eprintln!("Error in process watcher loop"));
+            .for_each(|_| future::ready(()));
 
         tokio::spawn(watcher);
     }
