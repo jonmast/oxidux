@@ -49,11 +49,6 @@ pub async fn start_server(
                 let client = Client::new();
                 let process_manager = process_manager.clone();
                 handle_request(req, client, process_manager)
-                // async move {
-                //     Ok::<_, hyper::Error>(
-                //         handle_request(req, &client, &process_manager).await,
-                //     )
-                // }
             }))
         }
     });

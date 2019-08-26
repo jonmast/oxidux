@@ -10,15 +10,13 @@ use nix::sys::signal::{self, Signal};
 use nix::sys::stat;
 use nix::unistd::{self, Pid};
 
+use failure::{bail, err_msg, format_err, ResultExt};
 use shellexpand;
 use tokio::fs::File;
-use tokio::future;
+use tokio::timer::Interval;
 
 use crate::config;
 use crate::output::Output;
-use failure::{bail, err_msg, format_err, ResultExt};
-use tokio::prelude::*;
-use tokio::timer::Interval;
 
 #[derive(Clone)]
 pub struct Process {
@@ -291,20 +289,24 @@ impl Process {
 
     fn watch_for_exit(&self) {
         let process = self.clone();
-        let watcher = Interval::new_interval(time::Duration::from_millis(WATCH_INTERVAL_MS))
-            .take_while(move |_| {
+
+        let watcher = async move {
+            let mut interval =
+                Interval::new_interval(time::Duration::from_millis(WATCH_INTERVAL_MS));
+
+            loop {
+                interval.next().await;
+
                 if let Some(pid) = process.pid() {
                     if signal::kill(pid, None).is_err() {
                         println!("Process died");
                         process.process_died();
 
-                        return future::ready(false);
+                        return;
                     }
                 }
-
-                future::ready(true)
-            })
-            .for_each(|_| future::ready(()));
+            }
+        };
 
         tokio::spawn(watcher);
     }

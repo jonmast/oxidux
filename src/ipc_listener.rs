@@ -59,11 +59,13 @@ pub fn start_ipc_sock(process_manager: ProcessManager) {
     let sock = UnixListener::bind(&path).expect("Failed to create IPC socket");
 
     let listener = sock.incoming().for_each(move |connection| {
-        read_command(&process_manager.clone(), connection.unwrap());
+        match connection {
+            Ok(connection) => read_command(&process_manager.clone(), connection),
+            Err(err) => eprintln!("Failed to read from IPC socket, got error {:?}", err)
+        };
 
         future::ready(())
     });
-    // .map_err(|err| eprintln!("Failed to read from IPC socket, got error {:?}", err));
 
     tokio::spawn(listener);
 }

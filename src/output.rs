@@ -1,6 +1,5 @@
 use crate::process::Process;
 use ansi_term::Color;
-use futures::future;
 use tokio::codec::{FramedRead, LinesCodec};
 use tokio::prelude::*;
 
@@ -11,7 +10,7 @@ pub struct Output {
 }
 
 impl Output {
-    pub fn for_stream<T: 'static + AsyncRead + Unpin + Send>(fifo: T, process: Process) -> Self {
+    pub fn for_stream<T: 'static + AsyncRead + Unpin + Send>(fifo: T, process: Process) {
         let index = process.port();
         let stream = FramedRead::new(fifo, LinesCodec::new());
 
@@ -19,30 +18,21 @@ impl Output {
 
         let output = Output { name, process };
 
-        output.setup_writer(stream);
-
-        output
+        tokio::spawn(output.setup_writer(stream));
     }
 
-    fn setup_writer<T>(&self, stream: OutputStream<T>)
+    async fn setup_writer<T>(self, mut stream: OutputStream<T>)
     where
         T: AsyncRead + Unpin + Send + 'static,
     {
-        let name = self.name.clone();
-
-        let printer = stream.for_each(move |line| {
+        while let Some(line) = stream.next().await {
             match line {
-                Ok(line) => println!("{}: {}", pick_color(1).paint(&name), line),
+                Ok(line) => println!("{}: {}", pick_color(1).paint(&self.name), line),
                 Err(error) => eprintln!("Error in log output: {}", error),
             }
+        }
 
-            future::ready(())
-        });
-
-        let process = self.process.clone();
-        let mapped = printer.map(move |_| process.process_died());
-
-        tokio::spawn(mapped);
+        self.process.process_died();
     }
 }
 
