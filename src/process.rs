@@ -13,7 +13,6 @@ use nix::unistd::{self, Pid};
 use failure::{bail, err_msg, format_err, ResultExt};
 use shellexpand;
 use tokio::fs::File;
-use tokio::timer::Interval;
 
 use crate::config;
 use crate::output::Output;
@@ -292,10 +291,10 @@ impl Process {
 
         let watcher = async move {
             let mut interval =
-                Interval::new_interval(time::Duration::from_millis(WATCH_INTERVAL_MS));
+                tokio::time::interval(time::Duration::from_millis(WATCH_INTERVAL_MS));
 
             loop {
-                interval.next().await;
+                interval.tick().await;
 
                 if let Some(pid) = process.pid() {
                     if signal::kill(pid, None).is_err() {

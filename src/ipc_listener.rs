@@ -2,12 +2,12 @@ use crate::config;
 use crate::ipc_command::IPCCommand;
 
 use failure::{err_msg, Error};
-use futures::future;
+use futures::StreamExt;
 use serde_json;
 use std::fs;
 use std::str;
 use tokio;
-use tokio::io::{AsyncWriteExt, BufReader};
+use tokio::io::BufReader;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::prelude::*;
 
@@ -15,15 +15,15 @@ use crate::ipc_response::IPCResponse;
 use crate::process::Process;
 use crate::process_manager::ProcessManager;
 
-fn read_command(process_manager: &ProcessManager, connection: UnixStream) {
-    let (reader, writer) = connection.split();
-    let mut msg = vec![];
-
+fn read_command(process_manager: &ProcessManager, mut connection: UnixStream) {
     let process_manager = process_manager.clone();
 
-    let mut reader = BufReader::new(reader);
-
     tokio::spawn(async move {
+        let (reader, writer) = connection.split();
+        let mut msg = vec![];
+
+        let mut reader = BufReader::new(reader);
+
         reader.read_until(b'\n', &mut msg).await.unwrap();
         let command =
             parse_incoming_command(&msg).expect("Failed to parse command, is it valid JSON?");
@@ -53,19 +53,19 @@ fn parse_incoming_command(buf: &[u8]) -> Result<IPCCommand, Error> {
 }
 
 pub fn start_ipc_sock(process_manager: ProcessManager) {
-    let path = config::socket_path();
-    fs::remove_file(&path).ok();
+    let listener = async move {
+        let path = config::socket_path();
+        fs::remove_file(&path).ok();
+        let mut sock = UnixListener::bind(&path).expect("Failed to create IPC socket");
+        let mut incoming = sock.incoming();
 
-    let sock = UnixListener::bind(&path).expect("Failed to create IPC socket");
-
-    let listener = sock.incoming().for_each(move |connection| {
-        match connection {
-            Ok(connection) => read_command(&process_manager.clone(), connection),
-            Err(err) => eprintln!("Failed to read from IPC socket, got error {:?}", err)
-        };
-
-        future::ready(())
-    });
+        while let Some(connection) = incoming.next().await {
+            match connection {
+                Ok(connection) => read_command(&process_manager.clone(), connection),
+                Err(err) => eprintln!("Failed to read from IPC socket, got error {:?}", err),
+            };
+        }
+    };
 
     tokio::spawn(listener);
 }

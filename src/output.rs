@@ -1,9 +1,9 @@
 use crate::process::Process;
 use ansi_term::Color;
-use tokio::codec::{FramedRead, LinesCodec};
+use tokio::io::{BufReader, Lines};
 use tokio::prelude::*;
 
-type OutputStream<T> = FramedRead<T, LinesCodec>;
+type OutputStream<T> = Lines<T>;
 pub struct Output {
     name: String,
     process: Process,
@@ -12,7 +12,7 @@ pub struct Output {
 impl Output {
     pub fn for_stream<T: 'static + AsyncRead + Unpin + Send>(fifo: T, process: Process) {
         let index = process.port();
-        let stream = FramedRead::new(fifo, LinesCodec::new());
+        let stream = BufReader::new(fifo).lines();
 
         let name = pick_color(index).paint(process.name()).to_string();
 
@@ -23,9 +23,9 @@ impl Output {
 
     async fn setup_writer<T>(self, mut stream: OutputStream<T>)
     where
-        T: AsyncRead + Unpin + Send + 'static,
+        T: AsyncBufRead + Unpin + Send + 'static,
     {
-        while let Some(line) = stream.next().await {
+        while let Some(line) = stream.next_line().await.transpose() {
             match line {
                 Ok(line) => println!("{}: {}", pick_color(1).paint(&self.name), line),
                 Err(error) => eprintln!("Error in log output: {}", error),

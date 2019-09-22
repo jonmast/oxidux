@@ -1,8 +1,8 @@
+use std::future::Future;
 use std::net::{SocketAddr, TcpListener};
 
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{client::HttpConnector, Body, Client, Request, Response, Server, Uri};
-use tokio::future::Future;
 use url::Url;
 
 mod autostart_response;
