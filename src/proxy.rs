@@ -7,6 +7,7 @@ use url::Url;
 
 mod autostart_response;
 mod host_missing;
+mod meta_server;
 
 use crate::{app::App, config::Config, process_manager::ProcessManager};
 
@@ -17,7 +18,10 @@ fn error_response(error: &hyper::Error, app: &App) -> Response<Body> {
 
     if app.is_running() {
         let body = Body::from(ERROR_MESSAGE);
-        Response::new(body)
+        Response::builder()
+            .header("Content-Type", "text/plain; charset=utf-8")
+            .body(body)
+            .unwrap()
     } else {
         app.start();
 
@@ -92,6 +96,10 @@ async fn handle_request(
             return Ok(host_missing::missing_host_response(host, &process_manager));
         }
     };
+
+    if meta_server::is_meta_request(&request) {
+        return Ok(meta_server::handle_request(request, app));
+    }
 
     let destination_url = app_url(&app, request.uri());
     *request.uri_mut() = destination_url;

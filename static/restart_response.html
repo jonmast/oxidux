@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+    <head>
+        <title>App not running, trying to start it | Oxidux</title>
+        <style>
+            body {
+                display: flex;
+                flex-direction: column;
+                height: 90vh;
+            }
+
+            h1 {
+                font-size: 1.5em;
+            }
+
+            pre {
+                font-family: monospace;
+                overflow: auto;
+
+                /* Solarized dark colorscheme */
+                color: #eee8d5;
+                background: #002b36;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>App doesn't seem to be running, trying to start it now.</h1>
+
+        <button onclick="location.reload()">Retry request</button>
+
+        <pre id="log"></pre>
+
+        <script>
+            const stream = new EventSource('/__oxidux__/logstream')
+
+            pre = document.getElementById('log')
+            stream.onmessage = ({data}) => {
+                pre.innerText += data
+                pre.innerText += "\n"
+
+                // Scroll to bottom
+                pre.scrollTop = pre.scrollHeight
+            }
+        </script>
+    </body>
+</html>
