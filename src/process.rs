@@ -1,3 +1,4 @@
+use std::env;
 use std::fs;
 use std::io::BufRead;
 use std::path::PathBuf;
@@ -225,9 +226,9 @@ impl Process {
         signal::kill(negate_pid(group_pid), signal).map_err(|_| "Failed to signal pid")
     }
 
-    fn shell_args(&self) -> [String; 3] {
+    fn shell_args(&self) -> [String; 5] {
         let full_command = format!(
-            "cd {directory}; export PORT={port}; {command}",
+            "exec bash -c 'cd {directory}; export PORT={port}; exec {command}'",
             directory = self.directory(),
             command = self.command(),
             port = self.port()
@@ -235,9 +236,9 @@ impl Process {
 
         eprintln!("Starting command {}", full_command);
 
-        let shell = "/bin/sh";
+        let shell = env::var("SHELL").unwrap_or("/bin/sh".into());
 
-        [shell.into(), "-c".into(), full_command]
+        [shell, "-l".into(), "-i".into(), "-c".into(), full_command]
     }
 
     fn build_command(&self) -> Command {
