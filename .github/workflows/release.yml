@@ -1,0 +1,48 @@
+on:
+  push:
+    tags:
+      # Consider any tag starting with v to be a release
+      - 'v*'
+
+name: Build and publish release
+
+jobs:
+  build:
+    name: Create Release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macOS-latest
+        include:
+          - os: ubuntu-latest
+            os_type: linux
+          - os: macOS-latest
+            os_type: osx
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Compile binary
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release
+
+      # Hacky way to get the base tag name without refs/tags
+      # https://github.com/softprops/action-gh-release/issues/4
+      - run: echo ::set-output name=version::${GITHUB_REF/refs\/tags\//''}
+        id: version
+
+      - run: mv ./target/release/oxidux oxidux-${{ steps.version.outputs.version }}-${{ matrix.os_type }}
+      - name: Upload Release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: oxidux-${{ steps.version.outputs.version }}-${{ matrix.os_type }}
+
