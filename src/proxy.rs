@@ -1,9 +1,8 @@
+use std::future::Future;
 use std::net::{SocketAddr, TcpListener};
 
-use futures::future::{self, Future};
-use hyper::{
-    self, client::HttpConnector, service::service_fn, Body, Client, Request, Response, Server, Uri,
-};
+use hyper::service::{make_service_fn, service_fn};
+use hyper::{client::HttpConnector, Body, Client, Request, Response, Server, Uri};
 use url::Url;
 
 mod autostart_response;
@@ -26,11 +25,11 @@ fn error_response(error: &hyper::Error, app: &App) -> Response<Body> {
     }
 }
 
-pub fn start_server(
-    config: &Config,
+pub async fn start_server(
+    config: Config,
     process_manager: ProcessManager,
-    shutdown_handler: impl Future,
-) -> impl Future<Item = (), Error = ()> {
+    shutdown_handler: impl Future<Output = ()>,
+) {
     let (addr, server) = if let Ok(listener) = get_activation_socket() {
         let addr = listener.local_addr().unwrap();
         (addr, Server::from_tcp(listener).unwrap())
@@ -41,16 +40,24 @@ pub fn start_server(
 
     println!("Starting proxy server on {}", addr);
 
-    let proxy = move || {
-        let client = Client::new();
-        let process_manager = process_manager.clone();
+    let process_manager = process_manager.clone();
 
-        service_fn(move |req| handle_request(req, &client, &process_manager))
-    };
-    server
-        .serve(proxy)
-        .with_graceful_shutdown(shutdown_handler.and_then(|_| Ok(())))
-        .map_err(|err| eprintln!("serve error: {:?}", err))
+    let proxy = make_service_fn(|_| {
+        let process_manager = process_manager.clone();
+        async move {
+            Ok::<_, hyper::Error>(service_fn(move |req| {
+                let client = Client::new();
+                let process_manager = process_manager.clone();
+                handle_request(req, client, process_manager)
+            }))
+        }
+    });
+
+    let server = server.serve(proxy).with_graceful_shutdown(shutdown_handler);
+
+    if let Err(e) = server.await {
+        eprintln!("server error: {}", e);
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -70,11 +77,11 @@ fn get_activation_socket() -> Result<TcpListener, failure::Error> {
     result.map_err(|e| e.into())
 }
 
-fn handle_request(
+async fn handle_request(
     mut request: Request<Body>,
-    client: &Client<HttpConnector>,
-    process_manager: &ProcessManager,
-) -> Box<dyn future::Future<Item = Response<Body>, Error = hyper::Error> + Send> {
+    client: Client<HttpConnector>,
+    process_manager: ProcessManager,
+) -> Result<Response<Body>, hyper::Error> {
     let host = request.headers().get("HOST").unwrap().to_str().unwrap();
     eprintln!("Serving request for host {:?}", host);
     eprintln!("Full req URI {}", request.uri());
@@ -82,10 +89,7 @@ fn handle_request(
     let app = match process_manager.find_app(&host) {
         Some(app) => app.clone(),
         None => {
-            return Box::new(futures::future::ok(host_missing::missing_host_response(
-                host,
-                process_manager,
-            )));
+            return Ok(host_missing::missing_host_response(host, &process_manager));
         }
     };
 
@@ -95,14 +99,16 @@ fn handle_request(
     // Apply header overrides from config
     request.headers_mut().extend(app.headers().clone());
 
-    Box::new(client.request(request).then(move |result| match result {
+    let result = client.request(request).await;
+
+    match result {
         Ok(response) => {
             eprintln!("Proxying response");
 
-            future::ok(response)
+            Ok(response)
         }
-        Err(e) => future::ok(error_response(&e, &app)),
-    }))
+        Err(e) => Ok(error_response(&e, &app)),
+    }
 }
 
 fn build_address(config: &Config) -> SocketAddr {

@@ -1,46 +1,38 @@
 use crate::process::Process;
 use ansi_term::Color;
-use futures::{Future, Stream};
+use tokio::io::{BufReader, Lines};
 use tokio::prelude::*;
-use tokio_codec::{FramedRead, LinesCodec};
 
-type OutputStream<T> = FramedRead<T, LinesCodec>;
+type OutputStream<T> = Lines<T>;
 pub struct Output {
     name: String,
     process: Process,
 }
 
 impl Output {
-    pub fn for_stream<T: 'static + AsyncRead + Send>(fifo: T, process: Process) -> Self {
+    pub fn for_stream<T: 'static + AsyncRead + Unpin + Send>(fifo: T, process: Process) {
         let index = process.port();
-        let stream = FramedRead::new(fifo, LinesCodec::new());
+        let stream = BufReader::new(fifo).lines();
 
         let name = pick_color(index).paint(process.name()).to_string();
 
         let output = Output { name, process };
 
-        output.setup_writer(stream);
-
-        output
+        tokio::spawn(output.setup_writer(stream));
     }
 
-    fn setup_writer<T>(&self, stream: OutputStream<T>)
+    async fn setup_writer<T>(self, mut stream: OutputStream<T>)
     where
-        T: 'static + AsyncRead + Send,
+        T: AsyncBufRead + Unpin + Send + 'static,
     {
-        let name = self.name.clone();
+        while let Some(line) = stream.next_line().await.transpose() {
+            match line {
+                Ok(line) => println!("{}: {}", pick_color(1).paint(&self.name), line),
+                Err(error) => eprintln!("Error in log output: {}", error),
+            }
+        }
 
-        let printer = stream.for_each(move |line| {
-            println!("{}: {}", pick_color(1).paint(&name), line);
-            Ok(())
-        });
-
-        let process = self.process.clone();
-        let mapped = printer
-            .map(move |_| process.process_died())
-            .map_err(|e| eprintln!("Output failed with error {}", e));
-
-        tokio::spawn(mapped);
+        self.process.process_died();
     }
 }
 

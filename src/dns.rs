@@ -1,11 +1,13 @@
-use futures::future::{self, Future, FutureResult, IntoFuture};
+use futures::{future, Future};
 use std::{
     net::{SocketAddr, TcpListener, UdpSocket},
+    pin::Pin,
     str::FromStr,
     sync::Arc,
     time::Duration,
 };
-use trust_dns::{
+use tokio::runtime::Runtime;
+use trust_dns_client::{
     op::{LowerQuery, ResponseCode},
     rr::{
         dnssec::{DnsSecResult, Signer, SupportedAlgorithms},
@@ -28,7 +30,7 @@ const TCP_TIMEOUT: u64 = 5;
 ///
 /// This is intended for use only with the MacOS resolver system, it can't be used as a regular DNS
 /// server to do real lookups.
-pub fn start_dns_server(port: u16, domain: &str) -> Result<(), failure::Error> {
+pub fn start_dns_server(port: u16, domain: &str, runtime: &Runtime) -> Result<(), failure::Error> {
     let dns_address = format!("127.0.0.1:{}", port);
     eprintln!("Starting DNS server on {}", dns_address);
     let mut catalog = Catalog::new();
@@ -39,12 +41,12 @@ pub fn start_dns_server(port: u16, domain: &str) -> Result<(), failure::Error> {
     };
     catalog.upsert(name.into(), Box::new(authority));
 
-    let server = ServerFuture::new(catalog);
+    let mut server = ServerFuture::new(catalog);
     let address: SocketAddr = dns_address.parse().unwrap();
     let udp_socket = UdpSocket::bind(&address)?;
-    server.register_socket_std(udp_socket);
+    server.register_socket_std(udp_socket, runtime);
     let tcp_listener = TcpListener::bind(&address)?;
-    server.register_listener_std(tcp_listener, Duration::from_secs(TCP_TIMEOUT))?;
+    server.register_listener_std(tcp_listener, Duration::from_secs(TCP_TIMEOUT), runtime)?;
     Ok(())
 }
 
@@ -54,7 +56,7 @@ struct LocalhostAuthority {
 
 impl Authority for LocalhostAuthority {
     type Lookup = AuthLookup;
-    type LookupFuture = FutureResult<Self::Lookup, LookupError>;
+    type LookupFuture = future::Ready<Result<Self::Lookup, LookupError>>;
 
     fn zone_type(&self) -> ZoneType {
         // Using forward, not sure if this is "correct" but other types require NS handling
@@ -79,7 +81,7 @@ impl Authority for LocalhostAuthority {
         query_type: RecordType,
         is_secure: bool,
         _supported_algorithms: SupportedAlgorithms,
-    ) -> Self::LookupFuture {
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Lookup, LookupError>> + Send>> {
         let result: LookupResult<LookupRecords> = match query_type {
             RecordType::A => {
                 let record =
@@ -102,9 +104,9 @@ impl Authority for LocalhostAuthority {
             _ => Err(LookupError::ResponseCode(ResponseCode::NXDomain)),
         };
 
-        result
-            .map(|answers| AuthLookup::answers(answers, None))
-            .into_future()
+        Box::pin(future::ready(
+            result.map(|answers| AuthLookup::answers(answers, None)),
+        ))
     }
 
     fn search(
@@ -112,10 +114,10 @@ impl Authority for LocalhostAuthority {
         query: &LowerQuery,
         is_secure: bool,
         supported_algorithms: SupportedAlgorithms,
-    ) -> Box<dyn Future<Item = Self::Lookup, Error = LookupError> + Send> {
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Lookup, LookupError>> + Send>> {
         // Always delegate to lookup for this, seems to be meant for handling AFXR which we're not
         // bothering with.
-        Box::new(self.lookup(
+        Box::pin(self.lookup(
             query.name(),
             query.query_type(),
             is_secure,
@@ -129,8 +131,8 @@ impl Authority for LocalhostAuthority {
         _name: &LowerName,
         _is_secure: bool,
         _supported_algorithms: SupportedAlgorithms,
-    ) -> Self::LookupFuture {
-        future::result(Ok(AuthLookup::default()))
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Lookup, LookupError>> + Send>> {
+        Box::pin(future::ok(AuthLookup::default()))
     }
 
     fn add_update_auth_key(&mut self, _name: Name, _key: KEY) -> DnsSecResult<()> {

@@ -6,16 +6,14 @@ authors = ["Jonathan Mast <jon@jonmast.com>"]
 license = "GPL-3.0-or-later"
 edition="2018"
 
+[package.metadata.release]
+tag-prefix = "v"
+sign-commit = true
+
 [dependencies]
-futures = "0.1.14"
-tokio = "0.1"
-tokio-core = "0.1"
-tokio-io = "0.1"
-tokio-process = "0.2.2"
-tokio-uds = "0.2.1"
-tokio-codec = "0.1"
-tokio-signal = "0.2.7"
-hyper = "0.12.0"
+futures = "0.3.1"
+tokio = { version = "0.2.4", features = ["tcp", "signal", "fs", "time", "uds", "io-util"] }
+hyper = "0.13.0"
 url = "2.0.0"
 toml = "0.5"
 serde = { version = "1.0", features = ["derive"] }
@@ -31,12 +29,8 @@ regex = "1"
 libc = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-trust-dns-server = "0.16.1"
-trust-dns = "0.16.1"
+trust-dns-server = "0.18.1"
+trust-dns-client = "0.18.1"
 
 [dev-dependencies]
 rand = "0.7.0"
-
-[package.metadata.release]
-tag-prefix = "v"
-sign-commit = true

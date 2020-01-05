@@ -10,14 +10,12 @@ use nix::sys::signal::{self, Signal};
 use nix::sys::stat;
 use nix::unistd::{self, Pid};
 
+use failure::{bail, err_msg, format_err, ResultExt};
 use shellexpand;
 use tokio::fs::File;
 
 use crate::config;
 use crate::output::Output;
-use failure::{bail, err_msg, format_err, ResultExt};
-use tokio::prelude::*;
-use tokio::timer::Interval;
 
 #[derive(Clone)]
 pub struct Process {
@@ -98,8 +96,7 @@ impl Process {
             .output()?
             .stdout;
 
-        let pid = pids
-            .lines()
+        let pid = BufRead::lines(&pids[..])
             .find_map(|line| match line {
                 Err(_) => None,
                 Ok(line) => {
@@ -291,21 +288,24 @@ impl Process {
 
     fn watch_for_exit(&self) {
         let process = self.clone();
-        let watcher = Interval::new_interval(time::Duration::from_millis(WATCH_INTERVAL_MS))
-            .take_while(move |_| {
+
+        let watcher = async move {
+            let mut interval =
+                tokio::time::interval(time::Duration::from_millis(WATCH_INTERVAL_MS));
+
+            loop {
+                interval.tick().await;
+
                 if let Some(pid) = process.pid() {
                     if signal::kill(pid, None).is_err() {
                         println!("Process died");
                         process.process_died();
 
-                        return Ok(false);
+                        return;
                     }
                 }
-
-                Ok(true)
-            })
-            .for_each(|_| Ok(()))
-            .map_err(|_| eprintln!("Error in process watcher loop"));
+            }
+        };
 
         tokio::spawn(watcher);
     }
