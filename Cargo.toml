@@ -30,7 +30,7 @@ libc = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 trust-dns-server = "0.18.1"
-trust-dns-client = "0.18.1"
+trust-dns-client = "0.19.2"
 
 [dev-dependencies]
 rand = "0.7.0"
