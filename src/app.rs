@@ -1,3 +1,5 @@
+use futures::Stream;
+
 use crate::config;
 use crate::process::Process;
 
@@ -82,5 +84,15 @@ impl App {
 
     pub fn tld(&self) -> &str {
         &self.tld
+    }
+
+    pub fn output_stream(&self) -> impl Stream<Item = (Process, String)> {
+        eprintln!("Registering output listener");
+
+        futures::stream::select_all(
+            self.processes
+                .iter()
+                .map(|process| process.register_output_watcher()),
+        )
     }
 }

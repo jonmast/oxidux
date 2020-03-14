@@ -27,7 +27,10 @@ impl Output {
     {
         while let Some(line) = stream.next_line().await.transpose() {
             match line {
-                Ok(line) => println!("{}: {}", pick_color(1).paint(&self.name), line),
+                Ok(line) => {
+                    println!("{}: {}", pick_color(1).paint(&self.name), line);
+                    self.process.output_line(line);
+                }
                 Err(error) => eprintln!("Error in log output: {}", error),
             }
         }

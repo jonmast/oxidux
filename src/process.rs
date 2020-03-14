@@ -13,7 +13,11 @@ use nix::unistd::{self, Pid};
 
 use failure::{bail, err_msg, format_err, ResultExt};
 use shellexpand;
-use tokio::fs::File;
+use tokio::{
+    fs::File,
+    stream::{Stream, StreamExt},
+    sync::broadcast,
+};
 
 use crate::config;
 use crate::output::Output;
@@ -31,6 +35,7 @@ struct Inner {
     directory: String,
     pid: Option<Pid>,
     restart_pending: bool,
+    output_channel: broadcast::Sender<(Process, String)>,
 }
 
 impl Process {
@@ -40,14 +45,16 @@ impl Process {
         command: String,
         port: u16,
     ) -> Self {
+        let (output_channel, _output_receiver) = broadcast::channel(50);
         let data = Inner {
             app_name: app_config.name.clone(),
             process_name,
             port,
-            command: command.to_string(),
+            command,
             directory: expand_path(&app_config.directory),
             pid: None,
             restart_pending: false,
+            output_channel,
         };
 
         Process {
@@ -236,7 +243,7 @@ impl Process {
 
         eprintln!("Starting command {}", full_command);
 
-        let shell = env::var("SHELL").unwrap_or("/bin/sh".into());
+        let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
 
         [shell, "-l".into(), "-i".into(), "-c".into(), full_command]
     }
@@ -319,6 +326,29 @@ impl Process {
 
     pub fn process_name(&self) -> String {
         self.inner().process_name.clone()
+    }
+
+    pub fn register_output_watcher(&self) -> impl Stream<Item = (Process, String)> {
+        self.inner()
+            .output_channel
+            .subscribe()
+            .filter_map(|result| match result {
+                Ok(val) => Some(val),
+                Err(e) => {
+                    eprintln!("Got error {} in output listener", e);
+                    None
+                }
+            })
+    }
+
+    /// Forwards stdout from process to any registered watchers
+    pub fn output_line(&self, line: String) {
+        let process = self.clone();
+        tokio::spawn(async move {
+            let output_channel = &process.inner().output_channel;
+
+            output_channel.send((process.clone(), line))
+        });
     }
 }
 
