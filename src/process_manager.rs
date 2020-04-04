@@ -1,15 +1,21 @@
 use crate::app::App;
 use crate::config::Config;
+use once_cell::sync::OnceCell;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ProcessManager {
     pub apps: Vec<App>,
 }
 
 const PORT_START: u16 = 7500;
+static INSTANCE: OnceCell<ProcessManager> = OnceCell::new();
 
 impl ProcessManager {
-    pub fn new(config: &Config) -> ProcessManager {
+    pub fn initialize(config: &Config) {
+        INSTANCE.set(Self::new(config)).unwrap();
+    }
+
+    fn new(config: &Config) -> ProcessManager {
         let apps = config
             .apps
             .iter()
@@ -24,6 +30,12 @@ impl ProcessManager {
             .collect();
 
         ProcessManager { apps }
+    }
+
+    pub(crate) fn global() -> &'static ProcessManager {
+        INSTANCE
+            .get()
+            .expect("Attempted to use ProcessManager before it was initalized")
     }
 
     /// Find the app associated with a given hostname

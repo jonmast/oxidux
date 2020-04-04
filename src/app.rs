@@ -3,7 +3,7 @@ use futures::Stream;
 use crate::config;
 use crate::process::Process;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct App {
     name: String,
     port: u16,

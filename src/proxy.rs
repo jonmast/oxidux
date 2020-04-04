@@ -29,11 +29,7 @@ fn error_response(error: &hyper::Error, app: &App) -> Response<Body> {
     }
 }
 
-pub async fn start_server(
-    config: Config,
-    process_manager: ProcessManager,
-    shutdown_handler: impl Future<Output = ()>,
-) {
+pub async fn start_server(config: Config, shutdown_handler: impl Future<Output = ()>) {
     let (addr, server) = if let Ok(listener) = get_activation_socket() {
         let addr = listener.local_addr().unwrap();
         (addr, Server::from_tcp(listener).unwrap())
@@ -44,17 +40,11 @@ pub async fn start_server(
 
     println!("Starting proxy server on {}", addr);
 
-    let process_manager = process_manager.clone();
-
-    let proxy = make_service_fn(|_| {
-        let process_manager = process_manager.clone();
-        async move {
-            Ok::<_, hyper::Error>(service_fn(move |req| {
-                let client = Client::new();
-                let process_manager = process_manager.clone();
-                handle_request(req, client, process_manager)
-            }))
-        }
+    let proxy = make_service_fn(|_| async move {
+        Ok::<_, hyper::Error>(service_fn(move |req| {
+            let client = Client::new();
+            handle_request(req, client)
+        }))
     });
 
     let server = server.serve(proxy).with_graceful_shutdown(shutdown_handler);
@@ -84,11 +74,12 @@ fn get_activation_socket() -> Result<TcpListener, failure::Error> {
 async fn handle_request(
     mut request: Request<Body>,
     client: Client<HttpConnector>,
-    process_manager: ProcessManager,
 ) -> Result<Response<Body>, hyper::Error> {
     let host = request.headers().get("HOST").unwrap().to_str().unwrap();
     eprintln!("Serving request for host {:?}", host);
     eprintln!("Full req URI {}", request.uri());
+
+    let process_manager = ProcessManager::global();
 
     let app = match process_manager.find_app(&host) {
         Some(app) => app.clone(),
