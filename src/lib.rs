@@ -4,11 +4,11 @@ use tokio::runtime::Runtime;
 use tokio::signal;
 use tokio::sync::oneshot;
 
-mod proxy;
+pub mod proxy;
 
 mod app;
 mod process;
-mod process_manager;
+pub mod process_manager;
 use crate::process_manager::ProcessManager;
 pub mod config;
 use crate::config::Config;
@@ -21,7 +21,7 @@ mod ipc_response;
 mod output;
 mod procfile;
 
-async fn ctrlc_listener(process_manager: ProcessManager) {
+async fn ctrlc_listener() {
     let (tx, rx) = oneshot::channel::<()>();
 
     let mut shutdown_tx = Some(tx);
@@ -33,7 +33,7 @@ async fn ctrlc_listener(process_manager: ProcessManager) {
             if let Some(tx) = shutdown_tx.take() {
                 eprintln!("Gracefully shutting down");
 
-                process_manager.shutdown();
+                ProcessManager::global().shutdown();
 
                 tx.send(()).unwrap();
             } else {
@@ -70,13 +70,13 @@ pub fn run_server(config: Config) {
     });
 
     runtime.block_on(async {
-        let process_manager = ProcessManager::new(&config);
+        ProcessManager::initialize(&config);
 
-        let shutdown_rx = ctrlc_listener(process_manager.clone());
+        let shutdown_rx = ctrlc_listener();
 
-        ipc_listener::start_ipc_sock(process_manager.clone());
+        ipc_listener::start_ipc_sock();
 
         println!("Spinning up server");
-        proxy::start_server(config, process_manager, shutdown_rx).await
+        proxy::start_server(config, shutdown_rx).await
     });
 }

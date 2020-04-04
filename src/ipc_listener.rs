@@ -15,8 +15,8 @@ use crate::ipc_response::IPCResponse;
 use crate::process::Process;
 use crate::process_manager::ProcessManager;
 
-fn read_command(process_manager: &ProcessManager, mut connection: UnixStream) {
-    let process_manager = process_manager.clone();
+fn read_command(mut connection: UnixStream) {
+    let process_manager = ProcessManager::global();
 
     tokio::spawn(async move {
         let (reader, writer) = connection.split();
@@ -28,7 +28,7 @@ fn read_command(process_manager: &ProcessManager, mut connection: UnixStream) {
         let command =
             parse_incoming_command(&msg).expect("Failed to parse command, is it valid JSON?");
 
-        run_command(&process_manager, &command, writer).await;
+        run_command(process_manager, &command, writer).await;
     });
 }
 
@@ -52,7 +52,7 @@ fn parse_incoming_command(buf: &[u8]) -> Result<IPCCommand, Error> {
     Ok(command)
 }
 
-pub fn start_ipc_sock(process_manager: ProcessManager) {
+pub fn start_ipc_sock() {
     let listener = async move {
         let path = config::socket_path();
         fs::remove_file(&path).ok();
@@ -61,7 +61,7 @@ pub fn start_ipc_sock(process_manager: ProcessManager) {
 
         while let Some(connection) = incoming.next().await {
             match connection {
-                Ok(connection) => read_command(&process_manager.clone(), connection),
+                Ok(connection) => read_command(connection),
                 Err(err) => eprintln!("Failed to read from IPC socket, got error {:?}", err),
             };
         }

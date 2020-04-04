@@ -22,11 +22,12 @@ use tokio::{
 use crate::config;
 use crate::output::Output;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Process {
     inner: Arc<Mutex<Inner>>,
 }
 
+#[derive(Debug)]
 struct Inner {
     app_name: String,
     process_name: String,
