@@ -236,7 +236,7 @@ impl Process {
 
     fn shell_args(&self) -> [String; 5] {
         let full_command = format!(
-            "exec bash -c 'cd {directory}; export PORT={port}; exec {command}'",
+            "exec bash -c 'cd {directory}; export PORT={port}; {command}'",
             directory = self.directory(),
             command = self.command(),
             port = self.port()
@@ -307,7 +307,7 @@ impl Process {
 
                 if let Some(pid) = process.pid() {
                     if signal::kill(pid, None).is_err() {
-                        println!("Process died");
+                        eprintln!("Process died");
                         process.process_died();
 
                         return;

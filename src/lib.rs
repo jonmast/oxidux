@@ -1,5 +1,7 @@
 #![warn(clippy::all)]
 
+use std::time::Duration;
+
 use tokio::runtime::Runtime;
 use tokio::signal;
 use tokio::sync::oneshot;
@@ -76,7 +78,8 @@ pub fn run_server(config: Config) {
 
         ipc_listener::start_ipc_sock();
 
-        println!("Spinning up server");
-        proxy::start_server(config, shutdown_rx).await
+        proxy::start_server(config, shutdown_rx).await;
     });
+
+    runtime.shutdown_timeout(Duration::from_millis(500));
 }

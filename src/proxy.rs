@@ -38,7 +38,7 @@ pub async fn start_server(config: Config, shutdown_handler: impl Future<Output =
         (*addr, Server::bind(addr))
     };
 
-    println!("Starting proxy server on {}", addr);
+    eprintln!("Starting proxy server on {}", addr);
 
     let proxy = make_service_fn(|_| async move {
         Ok::<_, hyper::Error>(service_fn(move |req| {

@@ -55,6 +55,7 @@ impl ProcessManager {
             .find(|app| directory.starts_with(&app.directory()))
     }
 
+    /// Stop all apps
     pub fn shutdown(&self) {
         for app in self.apps.iter() {
             if app.is_running() {
