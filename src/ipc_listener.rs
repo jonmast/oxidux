@@ -16,8 +16,6 @@ use crate::process::Process;
 use crate::process_manager::ProcessManager;
 
 fn read_command(mut connection: UnixStream) {
-    let process_manager = ProcessManager::global();
-
     tokio::spawn(async move {
         let (reader, writer) = connection.split();
         let mut msg = vec![];
@@ -28,17 +26,17 @@ fn read_command(mut connection: UnixStream) {
         let command =
             parse_incoming_command(&msg).expect("Failed to parse command, is it valid JSON?");
 
-        run_command(process_manager, &command, writer).await;
+        run_command(&command, writer).await;
     });
 }
 
-async fn run_command<T>(process_manager: &ProcessManager, command: &IPCCommand, writer: T)
+async fn run_command<T>(command: &IPCCommand, writer: T)
 where
     T: AsyncWrite + Unpin,
 {
     match command.command.as_ref() {
-        "restart" => restart_app(process_manager, command, writer).await,
-        "connect" => connect_output(process_manager, command, writer).await,
+        "restart" => restart_app(command, writer).await,
+        "connect" => connect_output(command, writer).await,
         "ping" => heartbeat_response(writer).await,
         cmd_str => eprintln!("Unknown command {}", cmd_str),
     }
@@ -70,7 +68,7 @@ pub fn start_ipc_sock() {
     tokio::spawn(listener);
 }
 
-async fn send_response<T>(process: Result<&Process, Error>, mut writer: T)
+async fn send_response<T>(process: &Result<Process, Error>, mut writer: T)
 where
     T: AsyncWrite + Unpin,
 {
@@ -80,52 +78,46 @@ where
     writer.write_all(&json.as_ref()).await.unwrap();
 }
 
-async fn connect_output(
-    process_manager: &ProcessManager,
-    command: &IPCCommand,
-    writer: impl AsyncWrite + Unpin,
-) {
-    let process = lookup_process(process_manager, &command.args);
+async fn connect_output(command: &IPCCommand, writer: impl AsyncWrite + Unpin) {
+    let process = {
+        let process_manager = ProcessManager::global().read().await;
+        lookup_process(&process_manager, &command.args)
+    };
 
-    send_response(
-        process.ok_or_else(|| err_msg("Failed to find app to connect to")),
-        writer,
-    )
-    .await;
+    let process = process.ok_or_else(|| err_msg("Failed to find app to connect to"));
+    send_response(&process, writer).await;
 
-    if process.is_none() {
-        eprintln!("Failed to find app to connect to");
+    if let Err(e) = process {
+        eprintln!("{}", e);
     }
 }
 
-async fn restart_app(
-    process_manager: &ProcessManager,
-    command: &IPCCommand,
-    writer: impl AsyncWrite + Unpin,
-) {
-    let process = lookup_process(&process_manager, &command.args);
+async fn restart_app(command: &IPCCommand, writer: impl AsyncWrite + Unpin) {
+    let process = {
+        let process_manager = ProcessManager::global().read().await;
+        lookup_process(&process_manager, &command.args)
+    };
 
-    send_response(
-        process.ok_or_else(|| err_msg("Failed to find app to restart")),
-        writer,
-    )
-    .await;
+    let process = process.ok_or_else(|| err_msg("Failed to find app to restart"));
+
+    send_response(&process, writer).await;
 
     match process {
-        Some(process) => {
+        Ok(process) => {
             process.restart();
         }
-        None => eprintln!("Failed to find app to restart"),
+        Err(e) => eprintln!("{}", e),
     }
 }
 
-fn lookup_process<'a>(process_manager: &'a ProcessManager, args: &[String]) -> Option<&'a Process> {
+fn lookup_process<'a>(process_manager: &'a ProcessManager, args: &[String]) -> Option<Process> {
     let app = process_manager.find_app_for_directory(&args[1])?;
 
     match args[0].as_ref() {
         "" => app.default_process(),
         name => app.find_process(name),
     }
+    .cloned()
 }
 
 async fn heartbeat_response(mut writer: impl AsyncWrite + Unpin) {

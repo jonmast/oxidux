@@ -15,7 +15,7 @@ pub enum IPCResponse {
 }
 
 impl IPCResponse {
-    pub fn for_process(process: Result<&Process, Error>) -> Self {
+    pub fn for_process(process: &Result<Process, Error>) -> Self {
         match process {
             Ok(process) => IPCResponse::ConnectionDetails {
                 app_name: process.app_name(),

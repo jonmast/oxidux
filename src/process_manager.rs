@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::config::Config;
 use once_cell::sync::OnceCell;
+use tokio::sync::RwLock;
 
 #[derive(Clone, Debug)]
 pub struct ProcessManager {
@@ -8,11 +9,11 @@ pub struct ProcessManager {
 }
 
 const PORT_START: u16 = 7500;
-static INSTANCE: OnceCell<ProcessManager> = OnceCell::new();
+static INSTANCE: OnceCell<RwLock<ProcessManager>> = OnceCell::new();
 
 impl ProcessManager {
     pub fn initialize(config: &Config) {
-        INSTANCE.set(Self::new(config)).unwrap();
+        INSTANCE.set(RwLock::new(Self::new(config))).unwrap();
     }
 
     fn new(config: &Config) -> ProcessManager {
@@ -32,7 +33,7 @@ impl ProcessManager {
         ProcessManager { apps }
     }
 
-    pub(crate) fn global() -> &'static ProcessManager {
+    pub(crate) fn global() -> &'static RwLock<ProcessManager> {
         INSTANCE
             .get()
             .expect("Attempted to use ProcessManager before it was initalized")
