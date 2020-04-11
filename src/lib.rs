@@ -33,7 +33,7 @@ async fn ctrlc_listener() {
             if let Some(tx) = shutdown_tx.take() {
                 eprintln!("Gracefully shutting down");
 
-                ProcessManager::global().shutdown();
+                ProcessManager::global().write().await.shutdown();
 
                 tx.send(()).unwrap();
             } else {

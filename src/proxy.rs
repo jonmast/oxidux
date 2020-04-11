@@ -79,12 +79,14 @@ async fn handle_request(
     eprintln!("Serving request for host {:?}", host);
     eprintln!("Full req URI {}", request.uri());
 
-    let process_manager = ProcessManager::global();
+    let app = {
+        let process_manager = ProcessManager::global().read().await;
 
-    let app = match process_manager.find_app(&host) {
-        Some(app) => app.clone(),
-        None => {
-            return Ok(host_missing::missing_host_response(host, &process_manager));
+        match process_manager.find_app(&host) {
+            Some(app) => app.clone(),
+            None => {
+                return Ok(host_missing::missing_host_response(host, &process_manager));
+            }
         }
     };
 
