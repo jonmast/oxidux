@@ -4,9 +4,9 @@ use crate::ipc_command::IPCCommand;
 use failure::{err_msg, Error};
 use futures::StreamExt;
 use serde_json;
-use std::fs;
 use std::str;
 use tokio;
+use tokio::fs;
 use tokio::io::BufReader;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::prelude::*;
@@ -53,7 +53,7 @@ fn parse_incoming_command(buf: &[u8]) -> Result<IPCCommand, Error> {
 pub fn start_ipc_sock() {
     let listener = async move {
         let path = config::socket_path();
-        fs::remove_file(&path).ok();
+        fs::remove_file(&path).await.ok();
         let mut sock = UnixListener::bind(&path).expect("Failed to create IPC socket");
         let mut incoming = sock.incoming();
 
@@ -72,7 +72,7 @@ async fn send_response<T>(process: &Result<Process, Error>, mut writer: T)
 where
     T: AsyncWrite + Unpin,
 {
-    let response = IPCResponse::for_process(process);
+    let response = IPCResponse::for_process(process).await;
 
     let json = serde_json::to_string(&response).unwrap();
     writer.write_all(&json.as_ref()).await.unwrap();
@@ -81,7 +81,7 @@ where
 async fn connect_output(command: &IPCCommand, writer: impl AsyncWrite + Unpin) {
     let process = {
         let process_manager = ProcessManager::global().read().await;
-        lookup_process(&process_manager, &command.args)
+        lookup_process(&process_manager, &command.args).await
     };
 
     let process = process.ok_or_else(|| err_msg("Failed to find app to connect to"));
@@ -95,7 +95,7 @@ async fn connect_output(command: &IPCCommand, writer: impl AsyncWrite + Unpin) {
 async fn restart_app(command: &IPCCommand, writer: impl AsyncWrite + Unpin) {
     let process = {
         let process_manager = ProcessManager::global().read().await;
-        lookup_process(&process_manager, &command.args)
+        lookup_process(&process_manager, &command.args).await
     };
 
     let process = process.ok_or_else(|| err_msg("Failed to find app to restart"));
@@ -104,18 +104,21 @@ async fn restart_app(command: &IPCCommand, writer: impl AsyncWrite + Unpin) {
 
     match process {
         Ok(process) => {
-            process.restart();
+            process.restart().await;
         }
         Err(e) => eprintln!("{}", e),
     }
 }
 
-fn lookup_process<'a>(process_manager: &'a ProcessManager, args: &[String]) -> Option<Process> {
+async fn lookup_process<'a>(
+    process_manager: &'a ProcessManager,
+    args: &[String],
+) -> Option<Process> {
     let app = process_manager.find_app_for_directory(&args[1])?;
 
     match args[0].as_ref() {
         "" => app.default_process(),
-        name => app.find_process(name),
+        name => app.find_process(name).await,
     }
     .cloned()
 }

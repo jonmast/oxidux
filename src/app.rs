@@ -1,3 +1,4 @@
+use futures::future::join_all;
 use futures::Stream;
 
 use crate::config;
@@ -47,26 +48,32 @@ impl App {
         self.port
     }
 
-    pub fn start(&self) {
+    pub async fn start(&self) {
         for process in &self.processes {
-            process.start().unwrap_or_else(|error| {
+            if let Err(error) = process.start().await {
                 eprint!(
                     "Process {} failed to start with error: {}",
-                    process.name(),
+                    process.name().await,
                     error
                 )
-            })
+            }
         }
     }
 
-    pub fn stop(&self) {
+    pub async fn stop(&self) {
         for process in &self.processes {
-            process.stop()
+            process.stop().await
         }
     }
 
-    pub fn is_running(&self) -> bool {
-        self.processes.iter().any(|process| process.is_running())
+    pub async fn is_running(&self) -> bool {
+        for process in &self.processes {
+            if process.is_running().await {
+                return true;
+            }
+        }
+
+        false
     }
 
     pub fn headers(&self) -> &hyper::HeaderMap {
@@ -76,23 +83,26 @@ impl App {
     pub fn default_process(&self) -> Option<&Process> {
         self.processes.first()
     }
-    pub fn find_process(&self, name: &str) -> Option<&Process> {
-        self.processes
-            .iter()
-            .find(|process| process.process_name() == name)
+
+    pub async fn find_process(&self, name: &str) -> Option<&Process> {
+        for process in &self.processes {
+            if process.process_name().await == name {
+                return Some(process);
+            }
+        }
+
+        None
     }
 
     pub fn tld(&self) -> &str {
         &self.tld
     }
 
-    pub fn output_stream(&self) -> impl Stream<Item = (Process, String)> {
+    pub async fn output_stream(&self) -> impl Stream<Item = (Process, String)> {
         eprintln!("Registering output listener");
 
-        futures::stream::select_all(
-            self.processes
-                .iter()
-                .map(|process| process.register_output_watcher()),
-        )
+        let streams = join_all(self.processes.iter().map(Process::register_output_watcher)).await;
+
+        futures::stream::select_all(streams)
     }
 }

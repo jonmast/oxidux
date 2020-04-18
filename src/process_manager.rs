@@ -56,10 +56,10 @@ impl ProcessManager {
     }
 
     /// Stop all apps
-    pub fn shutdown(&self) {
+    pub async fn shutdown(&self) {
         for app in self.apps.iter() {
-            if app.is_running() {
-                app.stop();
+            if app.is_running().await {
+                app.stop().await;
             }
         }
     }
