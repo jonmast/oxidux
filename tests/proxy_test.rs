@@ -6,7 +6,9 @@ use oxidux::config::{App, CommandConfig, Config, ProxyConfig};
 use oxidux::process_manager::ProcessManager;
 use std::env;
 use std::path::PathBuf;
+use std::time::Duration;
 use tokio::sync::oneshot;
+use tokio::time::delay_for;
 
 #[tokio::test]
 async fn it_proxies_to_configured_port() {
@@ -38,6 +40,9 @@ async fn it_proxies_to_configured_port() {
     });
 
     let _server = HelperCommand::run_echo_server(port).unwrap();
+
+    // Add an arbitrary delay to give the server time to boot
+    delay_for(Duration::from_millis(50)).await;
 
     // Send request to proxy
     let client = Client::new();
