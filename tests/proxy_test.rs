@@ -42,7 +42,7 @@ async fn it_proxies_to_configured_port() {
     let _server = HelperCommand::run_echo_server(port).unwrap();
 
     // Add an arbitrary delay to give the server time to boot
-    delay_for(Duration::from_millis(50)).await;
+    delay_for(Duration::from_millis(100)).await;
 
     // Send request to proxy
     let client = Client::new();
@@ -58,8 +58,9 @@ async fn it_proxies_to_configured_port() {
         .unwrap();
 
     let response = client.request(request).await.unwrap();
-    let mut buffer = hyper::body::aggregate(response.into_body()).await.unwrap();
+    assert_eq!(response.status(), 200);
 
+    let mut buffer = hyper::body::aggregate(response.into_body()).await.unwrap();
     let data: serde_json::Value =
         serde_json::from_str(std::str::from_utf8(&buffer.to_bytes()).unwrap()).unwrap();
 
