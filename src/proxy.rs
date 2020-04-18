@@ -13,17 +13,17 @@ use crate::{app::App, config::Config, process_manager::ProcessManager};
 
 const ERROR_MESSAGE: &str = "No response from server";
 
-fn error_response(error: &hyper::Error, app: &App) -> Response<Body> {
+async fn error_response(error: &hyper::Error, app: &App) -> Response<Body> {
     eprintln!("Request to backend failed with error \"{}\"", error);
 
-    if app.is_running() {
+    if app.is_running().await {
         let body = Body::from(ERROR_MESSAGE);
         Response::builder()
             .header("Content-Type", "text/plain; charset=utf-8")
             .body(body)
             .unwrap()
     } else {
-        app.start();
+        app.start().await;
 
         autostart_response::autostart_response()
     }
@@ -85,13 +85,13 @@ async fn handle_request(
         match process_manager.find_app(&host) {
             Some(app) => app.clone(),
             None => {
-                return Ok(host_missing::missing_host_response(host, &process_manager));
+                return Ok(host_missing::missing_host_response(host, &process_manager).await);
             }
         }
     };
 
     if meta_server::is_meta_request(&request) {
-        return Ok(meta_server::handle_request(request, app));
+        return Ok(meta_server::handle_request(request, app).await);
     }
 
     let destination_url = app_url(&app, request.uri());
@@ -108,7 +108,7 @@ async fn handle_request(
 
             Ok(response)
         }
-        Err(e) => Ok(error_response(&e, &app)),
+        Err(e) => Ok(error_response(&e, &app).await),
     }
 }
 

@@ -24,7 +24,10 @@ const POSTLUDE: &str = "
 </html>
 ";
 
-pub fn missing_host_response(app_name: &str, process_manager: &ProcessManager) -> Response<Body> {
+pub async fn missing_host_response(
+    app_name: &str,
+    process_manager: &ProcessManager,
+) -> Response<Body> {
     let mut html = String::new();
 
     html.push_str(PRELUDE);
@@ -32,7 +35,7 @@ pub fn missing_host_response(app_name: &str, process_manager: &ProcessManager) -
         "<h1>Couldn't find app {}, did you mean one of these?</h1>",
         app_name
     ));
-    html.push_str(&process_list(process_manager));
+    html.push_str(&process_list(process_manager).await);
     html.push_str(POSTLUDE);
 
     let body = Body::from(html);
@@ -50,13 +53,13 @@ const TABLE_HEADER: &str = "
     </thead>
 ";
 
-fn process_list(process_manager: &ProcessManager) -> String {
+async fn process_list(process_manager: &ProcessManager) -> String {
     let mut table = String::new();
 
     table.push_str(TABLE_HEADER);
 
     for app in process_manager.apps.iter() {
-        let status = if app.is_running() {
+        let status = if app.is_running().await {
             "Running"
         } else {
             "Stopped"

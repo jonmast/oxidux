@@ -11,20 +11,23 @@ pub struct Output {
 
 impl Output {
     pub fn for_stream<T: 'static + AsyncRead + Unpin + Send>(fifo: T, process: Process) {
-        let index = process.port();
-        let stream = BufReader::new(fifo).lines();
+        println!("spawning");
+        tokio::spawn(async {
+            let index = process.port().await;
+            let name = pick_color(index).paint(process.name().await).to_string();
+            let stream = BufReader::new(fifo).lines();
+            println!("streaming");
 
-        let name = pick_color(index).paint(process.name()).to_string();
-
-        let output = Output { name, process };
-
-        tokio::spawn(output.setup_writer(stream));
+            let output = Output { name, process };
+            output.setup_writer(stream).await
+        });
     }
 
     async fn setup_writer<T>(self, mut stream: OutputStream<T>)
     where
         T: AsyncBufRead + Unpin + Send + 'static,
     {
+        eprintln!("setting up the thing");
         while let Some(line) = stream.next_line().await.transpose() {
             match line {
                 Ok(line) => {
@@ -35,7 +38,7 @@ impl Output {
             }
         }
 
-        self.process.process_died();
+        self.process.process_died().await;
     }
 }
 

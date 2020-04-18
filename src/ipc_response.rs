@@ -15,12 +15,12 @@ pub enum IPCResponse {
 }
 
 impl IPCResponse {
-    pub fn for_process(process: &Result<Process, Error>) -> Self {
+    pub async fn for_process(process: &Result<Process, Error>) -> Self {
         match process {
             Ok(process) => IPCResponse::ConnectionDetails {
-                app_name: process.app_name(),
+                app_name: process.app_name().await,
                 tmux_socket: config::tmux_socket(),
-                tmux_session: process.tmux_session(),
+                tmux_session: process.tmux_session().await,
             },
 
             Err(error) => IPCResponse::NotFound(error.to_string()),

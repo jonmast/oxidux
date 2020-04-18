@@ -3,12 +3,12 @@ use hyper::{Body, Request, Response, StatusCode};
 
 use crate::app::App;
 
-pub fn handle_request(request: Request<Body>, app: App) -> Response<Body> {
+pub async fn handle_request(request: Request<Body>, app: App) -> Response<Body> {
     let action = request.uri().path().split('/').nth(2);
 
     match action {
-        Some("status") => status_response(app),
-        Some("logstream") => logstream_response(app),
+        Some("status") => status_response(app).await,
+        Some("logstream") => logstream_response(app).await,
         _ => not_found_response(),
     }
 }
@@ -17,8 +17,8 @@ pub fn is_meta_request<T>(request: &Request<T>) -> bool {
     request.uri().path().starts_with("/__oxidux__/")
 }
 
-fn status_response(app: App) -> Response<Body> {
-    let status = if app.is_running() {
+async fn status_response(app: App) -> Response<Body> {
+    let status = if app.is_running().await {
         "Running"
     } else {
         "Stopped"
@@ -34,11 +34,12 @@ fn not_found_response() -> Response<Body> {
         .unwrap()
 }
 
-fn logstream_response(app: App) -> Response<Body> {
+async fn logstream_response(app: App) -> Response<Body> {
     let output = app
         .output_stream()
-        .map(|(process, line)| -> Result<_, failure::Error> {
-            Ok(format!("data: {}: {}\n\n", process.name(), line))
+        .await
+        .then(|(process, line)| async move {
+            Ok::<_, failure::Error>(format!("data: {}: {}\n\n", process.name().await, line))
         });
 
     Response::builder()
