@@ -3,9 +3,10 @@ use crate::config::Config;
 use once_cell::sync::OnceCell;
 use tokio::sync::RwLock;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ProcessManager {
     pub apps: Vec<App>,
+    config: Config,
 }
 
 const PORT_START: u16 = 7500;
@@ -17,20 +18,10 @@ impl ProcessManager {
     }
 
     fn new(config: &Config) -> ProcessManager {
-        let apps = config
-            .apps
-            .iter()
-            .enumerate()
-            .map(|(idx, process_config)| {
-                App::from_config(
-                    &process_config,
-                    PORT_START + (idx as u16),
-                    config.general.domain.clone(),
-                )
-            })
-            .collect();
+        let apps = Vec::new();
 
-        ProcessManager { apps }
+        let config = config.clone();
+        ProcessManager { apps, config }
     }
 
     pub(crate) fn global() -> &'static RwLock<ProcessManager> {
@@ -47,6 +38,24 @@ impl ProcessManager {
 
         eprintln!("Looking for app {}", app_name);
         self.apps.iter().find(|app| app.name() == app_name)
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
+    pub fn add_app(&mut self, new_app: crate::config::App) -> App {
+        let highest_port = self.apps.iter().map(App::port).max().unwrap_or(PORT_START);
+
+        let app = App::from_config(
+            &new_app,
+            highest_port + 1,
+            self.config.general.domain.clone(),
+        );
+
+        self.apps.push(app.clone());
+
+        app
     }
 
     pub fn find_app_for_directory(&self, directory: &str) -> Option<&App> {
@@ -73,6 +82,7 @@ mod tests {
 
     #[test]
     fn find_app_with_subdomain() {
+        let config = config::Config::default();
         let app_config = config::App {
             name: "the_app".into(),
             directory: "".into(),
@@ -82,7 +92,10 @@ mod tests {
         };
 
         let app = App::from_config(&app_config, 0, "test".to_string());
-        let process_manager = ProcessManager { apps: vec![app] };
+        let process_manager = ProcessManager {
+            apps: vec![app],
+            config,
+        };
 
         let found_app = process_manager
             .find_app("subdomain.the_app.test")

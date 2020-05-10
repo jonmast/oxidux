@@ -5,44 +5,69 @@ use oxidux;
 use oxidux::config::{App, CommandConfig, Config, ProxyConfig};
 use oxidux::process_manager::ProcessManager;
 use std::env;
+use std::fs::{create_dir, File};
+use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::sync::oneshot;
 use tokio::time::delay_for;
 
+#[path = "./helpers/test_utils.rs"]
+mod test_utils;
+
 #[tokio::test]
 async fn it_proxies_to_configured_port() {
-    let (tx, rx) = oneshot::channel::<()>();
-    let port = 9585;
     let app_name = "proxy_test";
+    let port = 9585;
+    let config_dir = test_utils::temp_dir();
+    let app_dir = config_dir.join("apps");
+    create_dir(&app_dir).unwrap();
+
+    let mut app_file = File::create(&app_dir.join("proxy_test.toml")).unwrap();
+
+    app_file
+        .write_all(
+            format!(
+                "
+name = '{}'
+directory = '/'
+port = {}
+command = 'sleep 10; {}'
+",
+                app_name,
+                port,
+                test_process_path("echo-server").unwrap().to_str().unwrap()
+            )
+            .as_ref(),
+        )
+        .unwrap();
+
+    let (tx, rx) = oneshot::channel::<()>();
     let tld = "test";
-    let app = App {
-        name: app_name.into(),
-        directory: "/".into(),
-        port: Some(port),
-        headers: Default::default(),
-        command_config: CommandConfig::Command("/bin/true".into()),
-    };
     let proxy_port = 9584;
     let config = Config {
         general: ProxyConfig {
             proxy_port,
+            config_dir: config_dir.to_path_buf(),
             domain: tld.into(),
             ..Default::default()
         },
-        apps: vec![app],
+        apps: vec![],
     };
 
     ProcessManager::initialize(&config);
 
     tokio::spawn(async {
-        oxidux::proxy::start_server(config, rx.map(|_| ())).await;
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            oxidux::proxy::start_server(config, rx.map(|_| ())),
+        )
+        .await
+        .unwrap();
     });
 
+    // TODO: remove this and let the app autostart
     let _server = HelperCommand::run_echo_server(port).unwrap();
-
-    // Add an arbitrary delay to give the server time to boot
-    delay_for(Duration::from_millis(100)).await;
 
     // Send request to proxy
     let client = Client::new();
@@ -52,12 +77,18 @@ async fn it_proxies_to_configured_port() {
         .parse()
         .unwrap();
     let request = Request::builder()
-        .uri(uri)
+        .uri(&uri)
         .header("host", app_host.clone())
         .body(Body::from(greeting))
         .unwrap();
 
-    let response = client.request(request).await.unwrap();
+    // Add an arbitrary delay to give the server time to boot
+    delay_for(Duration::from_millis(100)).await;
+
+    let response = tokio::time::timeout(Duration::from_secs(1), client.request(request))
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(response.status(), 200);
 
     let mut buffer = hyper::body::aggregate(response.into_body()).await.unwrap();

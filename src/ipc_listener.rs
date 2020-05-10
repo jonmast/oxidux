@@ -110,10 +110,7 @@ async fn restart_app(command: &IPCCommand, writer: impl AsyncWrite + Unpin) {
     }
 }
 
-async fn lookup_process<'a>(
-    process_manager: &'a ProcessManager,
-    args: &[String],
-) -> Option<Process> {
+async fn lookup_process(process_manager: &ProcessManager, args: &[String]) -> Option<Process> {
     let app = process_manager.find_app_for_directory(&args[1])?;
 
     match args[0].as_ref() {

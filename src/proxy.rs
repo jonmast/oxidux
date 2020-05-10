@@ -5,6 +5,8 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::{client::HttpConnector, Body, Client, Request, Response, Server, Uri};
 use url::Url;
 
+use crate::host_resolver;
+
 mod autostart_response;
 mod host_missing;
 mod meta_server;
@@ -80,11 +82,10 @@ async fn handle_request(
     eprintln!("Full req URI {}", request.uri());
 
     let app = {
-        let process_manager = ProcessManager::global().read().await;
-
-        match process_manager.find_app(&host) {
+        match host_resolver::resolve(&host).await {
             Some(app) => app.clone(),
             None => {
+                let process_manager = ProcessManager::global().read().await;
                 return Ok(host_missing::missing_host_response(host, &process_manager).await);
             }
         }

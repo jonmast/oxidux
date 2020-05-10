@@ -1,7 +1,11 @@
+use failure::ResultExt;
 use std::collections::HashMap;
 use std::fs::{create_dir, File};
 use std::io::prelude::*;
 use std::path::PathBuf;
+use tokio::fs::{read_dir as async_read_dir, File as AsyncFile};
+use tokio::io::AsyncReadExt;
+use tokio::stream::StreamExt;
 
 use dirs;
 use hyper::header::{HeaderMap, HeaderName, HeaderValue};
@@ -13,10 +17,68 @@ use toml;
 
 use crate::procfile;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Default)]
 pub struct Config {
     pub general: ProxyConfig,
+    #[deprecated]
     pub apps: Vec<App>,
+}
+
+impl Config {
+    /// Retrieve app config for a hostname
+    ///
+    /// Searches through configs on disk to find the best match
+    pub async fn find_app_by_host(&self, hostname: &str) -> Option<App> {
+        // TODO: unify with process_manager logic and make more robust with subdomains, etc
+        let parts = hostname.split('.');
+        let app_name = parts.rev().nth(1).unwrap_or(hostname);
+
+        for app in self.app_configs().await {
+            if app.name == app_name {
+                return Some(app);
+            }
+        }
+        None
+    }
+
+    async fn app_configs(&self) -> Vec<App> {
+        let app_config_dir = self.general.config_dir.join("apps");
+        let mut results = Vec::new();
+        match async_read_dir(app_config_dir).await {
+            Ok(mut entries) => {
+                while let Some(entry) = entries.next().await {
+                    match read_app_config(entry).await {
+                        Ok(app) => results.push(app),
+                        Err(e) => {
+                            eprintln!("Skipping app config due to error: {}", e);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Error reading from app config directory: {}", e);
+                return vec![];
+            }
+        };
+
+        results
+    }
+}
+
+async fn read_app_config(
+    entry: tokio::io::Result<tokio::fs::DirEntry>,
+) -> Result<App, failure::Error> {
+    let path = entry.context("Error reading directory entry")?.path();
+    let mut file = AsyncFile::open(&path)
+        .await
+        .context("Error reading app file")?;
+
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)
+        .await
+        .context("Error reading config file")?;
+    let app = toml::from_str(&contents).context("Invalid config file")?;
+    Ok(app)
 }
 
 fn default_dns_port() -> u16 {
@@ -27,22 +89,30 @@ fn default_domain() -> String {
     "test".to_string()
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, Clone)]
 pub struct ProxyConfig {
     pub proxy_port: u16,
     #[serde(default = "default_dns_port")]
     pub dns_port: u16,
     #[serde(default = "default_domain")]
     pub domain: String,
+    #[serde(default = "config_dir")]
+    pub config_dir: PathBuf,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum CommandConfig {
     Command(String),
     Commands(HashMap<String, String>),
     #[serde(deserialize_with = "true_to_unit")]
     Procfile,
+}
+
+impl Default for CommandConfig {
+    fn default() -> Self {
+        CommandConfig::Procfile
+    }
 }
 
 impl CommandConfig {
@@ -58,7 +128,7 @@ impl CommandConfig {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Eq, PartialEq, Default)]
 #[serde(deny_unknown_fields)]
 pub struct App {
     pub name: String,
@@ -140,6 +210,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils;
     use hyper::header::HOST;
 
     #[test]
@@ -154,5 +225,40 @@ mod tests {
         let app: App = toml::from_str(data).unwrap();
 
         assert!(app.parsed_headers().contains_key(HOST));
+    }
+
+    #[tokio::test]
+    async fn find_app_by_host_test() {
+        let tmp = test_utils::temp_dir();
+        let app_dir = tmp.join("apps");
+        create_dir(&app_dir).unwrap();
+
+        let mut app_file = File::create(&app_dir.join("testapp.toml")).unwrap();
+
+        app_file
+            .write_all(
+                b"
+name = 'testapp'
+directory = '~'
+command = '/bin/true'
+",
+            )
+            .unwrap();
+
+        let proxy_config = ProxyConfig {
+            config_dir: tmp.to_path_buf(),
+            ..ProxyConfig::default()
+        };
+
+        let config = Config {
+            general: proxy_config,
+            apps: vec![],
+        };
+
+        let found_app = config.find_app_by_host("testapp.test").await.unwrap();
+        assert_eq!(
+            CommandConfig::Command("/bin/true".to_string()),
+            found_app.command_config
+        )
     }
 }
