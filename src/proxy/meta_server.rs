@@ -18,11 +18,19 @@ pub fn is_meta_request<T>(request: &Request<T>) -> bool {
 }
 
 async fn status_response(app: App) -> Response<Body> {
-    let status = if app.is_running().await {
-        "Running"
-    } else {
-        "Stopped"
-    };
+    let mut status = "".to_string();
+
+    for process in app.processes {
+        status.push_str(&format!(
+            "{}: {}\n",
+            process.name().await,
+            process
+                .pid()
+                .await
+                .map(|p| p.to_string())
+                .unwrap_or_else(|| "Stopped".to_string())
+        ));
+    }
 
     Response::new(Body::from(status))
 }

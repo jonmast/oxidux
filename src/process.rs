@@ -287,7 +287,7 @@ impl Process {
         self.inner().await.command.clone()
     }
 
-    async fn pid(&self) -> Option<Pid> {
+    pub async fn pid(&self) -> Option<Pid> {
         self.inner().await.pid
     }
 

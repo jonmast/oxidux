@@ -11,7 +11,7 @@ pub struct App {
     directory: String,
     command_config: config::CommandConfig,
     headers: hyper::HeaderMap,
-    processes: Vec<Process>,
+    pub processes: Vec<Process>,
     tld: String,
 }
 
