@@ -18,8 +18,6 @@ use crate::procfile;
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct Config {
     pub general: ProxyConfig,
-    #[deprecated]
-    pub apps: Vec<App>,
 }
 
 impl Config {
@@ -250,7 +248,6 @@ command = '/bin/true'
 
         let config = Config {
             general: proxy_config,
-            apps: vec![],
         };
 
         let found_app = config.find_app_by_host("testapp.test").await.unwrap();

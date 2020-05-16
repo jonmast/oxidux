@@ -1,8 +1,7 @@
 use futures::future::FutureExt;
 use hyper::body::Buf;
 use hyper::{Body, Client, Request};
-use oxidux;
-use oxidux::config::{App, CommandConfig, Config, ProxyConfig};
+use oxidux::config::{Config, ProxyConfig};
 use oxidux::process_manager::ProcessManager;
 use std::env;
 use std::fs::{create_dir, File};
@@ -52,7 +51,6 @@ command = 'sleep 10; {}'
             domain: tld.into(),
             ..Default::default()
         },
-        apps: vec![],
     };
 
     ProcessManager::initialize(&config);

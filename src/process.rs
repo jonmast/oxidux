@@ -136,7 +136,10 @@ impl Process {
         // Clean up any existing tmux sessions with conflicting names
         self.kill_tmux_session().await?;
 
-        let child_pid = tmux::new_session(&self.tmux_session().await, &self.shell_args().await)
+        let args = self.shell_args().await;
+        eprintln!("Starting command {}", args[4]);
+
+        let child_pid = tmux::new_session(&self.tmux_session().await, &args)
             .await
             .map_err(|_| "Failed to start app process")?
             .stdout;
@@ -242,8 +245,6 @@ impl Process {
             command = self.command().await,
             port = self.port().await
         );
-
-        eprintln!("Starting command {}", full_command);
 
         let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
 
