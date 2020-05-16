@@ -1,7 +1,9 @@
 use crate::app::App;
 use crate::config::Config;
 use once_cell::sync::OnceCell;
+use std::time::Duration;
 use tokio::sync::RwLock;
+use tokio::time::delay_for;
 
 #[derive(Debug)]
 pub struct ProcessManager {
@@ -70,6 +72,19 @@ impl ProcessManager {
             if app.is_running().await {
                 app.stop().await;
             }
+        }
+
+        // Poll processes until they stop
+        'outer: loop {
+            delay_for(Duration::from_millis(100)).await;
+
+            for app in &self.apps {
+                if app.is_running().await {
+                    continue 'outer;
+                }
+            }
+
+            return;
         }
     }
 }

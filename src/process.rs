@@ -2,7 +2,6 @@ use std::env;
 use std::fs;
 use std::io::BufRead;
 use std::path::PathBuf;
-use std::process::{self, Command};
 use std::str;
 use std::sync::Arc;
 use std::time;
@@ -12,7 +11,6 @@ use nix::sys::stat;
 use nix::unistd::{self, Pid};
 
 use failure::{bail, err_msg, format_err, ResultExt};
-use shellexpand;
 use tokio::{
     fs::File,
     stream::{Stream, StreamExt},
@@ -21,6 +19,7 @@ use tokio::{
 
 use crate::config;
 use crate::output::Output;
+use crate::tmux;
 
 #[derive(Clone, Debug)]
 pub struct Process {
@@ -75,40 +74,26 @@ impl Process {
         self.inner().await.app_name.clone()
     }
 
-    fn base_tmux_command(&self) -> Command {
-        let mut command = Command::new("tmux");
-        command.args(&["-L", &config::tmux_socket()]);
-        command.args(&["-f", "/dev/null"]);
-
-        command
-    }
-
-    async fn kill_tmux_session(&self) -> Result<process::Output, String> {
-        self.base_tmux_command()
-            .args(&["kill-session", "-t", &self.tmux_session().await])
-            .output()
+    async fn kill_tmux_session(&self) -> Result<(), String> {
+        tmux::kill_session(&self.tmux_session().await)
+            .await
+            .map(drop)
             .map_err(|e| format!("Cleaning up old tmux session failed with error {}", e))
     }
 
     async fn respawn_tmux_session(&self) -> Result<(), failure::Error> {
-        let mut cmd = self.base_tmux_command();
         let session_name = self.tmux_session().await;
+        let shell_args = self.shell_args();
 
-        let result = cmd
-            .args(&["respawn-window", "-t", &session_name])
-            .args(&self.shell_args().await)
-            .status()
+        let result = tmux::respawn_window(&session_name, &shell_args.await)
+            .await
             .context("Error trying to run respawn command")?;
 
         if !result.success() {
             bail!("Non-zero return status from respawn-session");
         }
 
-        let pids = self
-            .base_tmux_command()
-            .args(&["list-sessions", "-F", "#{session_name}|#{pane_pid}"])
-            .output()?
-            .stdout;
+        let pids = tmux::list_sessions().await?.stdout;
 
         let pid = BufRead::lines(&pids[..])
             .find_map(|line| match line {
@@ -131,6 +116,9 @@ impl Process {
         .await;
 
         self.watch_for_exit();
+        self.pipe_output()
+            .await
+            .unwrap_or_else(|e| println!("{}", e));
 
         Ok(())
     }
@@ -139,17 +127,17 @@ impl Process {
         self.set_restart_pending(false).await;
 
         if self.respawn_tmux_session().await.is_ok() {
+            println!("Respawned existing session");
             // Bail out if respawning worked
             return Ok(());
         }
+        println!("Starting new session");
 
         // Clean up any existing tmux sessions with conflicting names
         self.kill_tmux_session().await?;
 
-        let child_pid = self
-            .build_command()
+        let child_pid = tmux::new_session(&self.tmux_session().await, &self.shell_args().await)
             .await
-            .output()
             .map_err(|_| "Failed to start app process")?
             .stdout;
 
@@ -166,18 +154,23 @@ impl Process {
         .await;
 
         self.watch_for_exit();
+        self.pipe_output().await?;
 
+        Ok(())
+    }
+
+    /// Capture process output for our logging system
+    async fn pipe_output(&self) -> Result<(), String> {
         let fifo_path = self.setup_fifo().await;
-        let catpipe = format!("cat >> {}", fifo_path.to_string_lossy());
 
-        self.base_tmux_command()
-            .args(&["pipe-pane", &catpipe])
-            .status()
+        tmux::pipe_pane(&fifo_path)
+            .await
             .map_err(|_| "Failed to set up tmux output pipe")?;
 
         let fifo =
             fs::File::open(&fifo_path).map_err(|e| format!("Couldn't open FIFO, got {}", e))?;
         Output::for_stream(File::from_std(fifo), self.clone());
+
         Ok(())
     }
 
@@ -255,20 +248,6 @@ impl Process {
         let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
 
         [shell, "-l".into(), "-i".into(), "-c".into(), full_command]
-    }
-
-    async fn build_command(&self) -> Command {
-        let mut cmd = self.base_tmux_command();
-
-        cmd.args(&["new-session", "-s", &self.tmux_session().await])
-            .args(&["-d", "-P", "-F", "#{pane_pid}"])
-            .args(&self.shell_args().await)
-            .args(&[";", "set", "remain-on-exit", "on"])
-            .args(&[";", "set", "mouse", "on"])
-            .args(&[";", "set", "status-right", "Press C-x to disconnect"])
-            .args(&[";", "bind-key", "-n", "C-x", "detach-client"]);
-
-        cmd
     }
 
     pub async fn tmux_session(&self) -> String {
@@ -393,7 +372,6 @@ mod tests {
 
     #[test]
     fn expand_path_replaces_tilde() {
-        use dirs;
         use std::path;
 
         let home_dir = dirs::home_dir().unwrap();

@@ -3,9 +3,7 @@ use crate::ipc_command::IPCCommand;
 
 use failure::{err_msg, Error};
 use futures::StreamExt;
-use serde_json;
 use std::str;
-use tokio;
 use tokio::fs;
 use tokio::io::BufReader;
 use tokio::net::{UnixListener, UnixStream};
@@ -114,7 +112,7 @@ async fn lookup_process(process_manager: &ProcessManager, args: &[String]) -> Op
     let app = process_manager.find_app_for_directory(&args[1])?;
 
     match args[0].as_ref() {
-        "" => app.default_process(),
+        "" => app.default_process().await,
         name => app.find_process(name).await,
     }
     .cloned()

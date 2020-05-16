@@ -7,13 +7,11 @@ use tokio::fs::{read_dir as async_read_dir, File as AsyncFile};
 use tokio::io::AsyncReadExt;
 use tokio::stream::StreamExt;
 
-use dirs;
 use hyper::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::{
     de::{self, Unexpected},
     Deserialize, Deserializer,
 };
-use toml;
 
 use crate::procfile;
 

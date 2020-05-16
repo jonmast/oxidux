@@ -1,7 +1,10 @@
+use std::time::Duration;
 use tokio::signal;
 use tokio::sync::oneshot;
+use tokio::time::timeout;
 
 use crate::process_manager::ProcessManager;
+use crate::tmux;
 
 pub(crate) async fn ctrlc_listener() {
     let (tx, rx) = oneshot::channel::<()>();
@@ -15,7 +18,15 @@ pub(crate) async fn ctrlc_listener() {
             if let Some(tx) = shutdown_tx.take() {
                 eprintln!("Gracefully shutting down");
 
-                ProcessManager::global().write().await.shutdown().await;
+                timeout(
+                    Duration::from_secs(10),
+                    ProcessManager::global().write().await.shutdown(),
+                )
+                .await
+                .ok();
+
+                tmux::kill_server().await.ok();
+                eprintln!("All processes have stopped");
 
                 tx.send(()).unwrap();
             } else {

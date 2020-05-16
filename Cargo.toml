@@ -13,7 +13,7 @@ sign-commit = true
 
 [dependencies]
 futures = "0.3.1"
-tokio = { version = "0.2.4", features = ["tcp", "signal", "fs", "time", "uds", "io-util", "sync", "macros"] }
+tokio = { version = "0.2.4", features = ["tcp", "signal", "fs", "time", "uds", "io-util", "sync", "macros", "process"] }
 hyper = "0.13.0"
 url = "2.0.0"
 toml = "0.5"

@@ -11,12 +11,10 @@ pub struct Output {
 
 impl Output {
     pub fn for_stream<T: 'static + AsyncRead + Unpin + Send>(fifo: T, process: Process) {
-        println!("spawning");
         tokio::spawn(async {
             let index = process.port().await;
             let name = pick_color(index).paint(process.name().await).to_string();
             let stream = BufReader::new(fifo).lines();
-            println!("streaming");
 
             let output = Output { name, process };
             output.setup_writer(stream).await
@@ -27,7 +25,6 @@ impl Output {
     where
         T: AsyncBufRead + Unpin + Send + 'static,
     {
-        eprintln!("setting up the thing");
         while let Some(line) = stream.next_line().await.transpose() {
             match line {
                 Ok(line) => {

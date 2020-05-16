@@ -4,6 +4,9 @@ use futures::Stream;
 use crate::config;
 use crate::process::Process;
 
+// Follow Heroku convention of "web" as the label for primary process
+const DEFAULT_PROCESS: &str = "web";
+
 #[derive(Clone, Debug)]
 pub struct App {
     name: String,
@@ -80,8 +83,10 @@ impl App {
         &self.headers
     }
 
-    pub fn default_process(&self) -> Option<&Process> {
-        self.processes.first()
+    pub async fn default_process(&self) -> Option<&Process> {
+        self.find_process(DEFAULT_PROCESS)
+            .await
+            .or_else(|| self.processes.first())
     }
 
     pub async fn find_process(&self, name: &str) -> Option<&Process> {

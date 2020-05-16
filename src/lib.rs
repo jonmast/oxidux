@@ -22,6 +22,7 @@ mod ipc_response;
 mod output;
 mod procfile;
 mod signals;
+mod tmux;
 
 fn server_running() -> bool {
     if let Ok(response) = ipc_command::ping_server() {
