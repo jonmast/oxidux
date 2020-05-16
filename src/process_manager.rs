@@ -67,7 +67,7 @@ impl ProcessManager {
     }
 
     /// Stop all apps
-    pub async fn shutdown(&self) {
+    pub async fn shutdown(&mut self) {
         for app in self.apps.iter() {
             if app.is_running().await {
                 app.stop().await;
@@ -76,13 +76,16 @@ impl ProcessManager {
 
         // Poll processes until they stop
         'outer: loop {
-            delay_for(Duration::from_millis(100)).await;
+            delay_for(Duration::from_millis(200)).await;
 
             for app in &self.apps {
                 if app.is_running().await {
                     continue 'outer;
                 }
             }
+
+            // Drop processes to clean up any leftover watchers
+            self.apps.clear();
 
             return;
         }
