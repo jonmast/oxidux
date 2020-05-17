@@ -12,6 +12,7 @@ pub enum IPCResponse {
         tmux_socket: String,
         tmux_session: String,
     },
+    Status(String),
 }
 
 impl IPCResponse {

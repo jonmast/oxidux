@@ -5,31 +5,46 @@ use serde::{Deserialize, Serialize};
 use crate::config;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct IPCCommand {
-    pub command: String,
-    pub args: Vec<String>,
+pub(crate) enum IPCCommand {
+    Restart {
+        process_name: Option<String>,
+        directory: String,
+    },
+    Connect {
+        process_name: Option<String>,
+        directory: String,
+    },
+    Stop {
+        app_name: Option<String>,
+        directory: String,
+    },
+    Ping,
 }
 
 impl IPCCommand {
-    pub fn restart_command(process_name: String, directory: String) -> Self {
-        Self {
-            command: "restart".to_string(),
-            args: vec![process_name, directory],
+    pub fn restart_command(process_name: Option<String>, directory: String) -> Self {
+        Self::Restart {
+            process_name,
+            directory,
         }
     }
 
-    pub fn connect_command(process_name: String, directory: String) -> Self {
-        Self {
-            command: "connect".to_string(),
-            args: vec![process_name, directory],
+    pub fn connect_command(process_name: Option<String>, directory: String) -> Self {
+        Self::Connect {
+            process_name,
+            directory,
+        }
+    }
+
+    pub fn stop_command(app_name: Option<String>, directory: String) -> Self {
+        Self::Stop {
+            app_name,
+            directory,
         }
     }
 
     pub fn heartbeat_command() -> Self {
-        Self {
-            command: "ping".to_string(),
-            args: Vec::new(),
-        }
+        Self::Ping
     }
 }
 

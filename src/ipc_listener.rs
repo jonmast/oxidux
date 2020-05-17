@@ -32,11 +32,20 @@ async fn run_command<T>(command: &IPCCommand, writer: T)
 where
     T: AsyncWrite + Unpin,
 {
-    match command.command.as_ref() {
-        "restart" => restart_app(command, writer).await,
-        "connect" => connect_output(command, writer).await,
-        "ping" => heartbeat_response(writer).await,
-        cmd_str => eprintln!("Unknown command {}", cmd_str),
+    match command {
+        IPCCommand::Restart {
+            process_name,
+            directory,
+        } => restart_app(process_name, directory, writer).await,
+        IPCCommand::Connect {
+            process_name,
+            directory,
+        } => connect_output(process_name, directory, writer).await,
+        IPCCommand::Stop {
+            app_name,
+            directory,
+        } => stop_app(app_name, directory, writer).await,
+        IPCCommand::Ping => heartbeat_response(writer).await,
     }
 }
 
@@ -76,10 +85,14 @@ where
     writer.write_all(&json.as_ref()).await.unwrap();
 }
 
-async fn connect_output(command: &IPCCommand, writer: impl AsyncWrite + Unpin) {
+async fn connect_output(
+    process_name: &Option<String>,
+    directory: &str,
+    writer: impl AsyncWrite + Unpin,
+) {
     let process = {
         let process_manager = ProcessManager::global().read().await;
-        lookup_process(&process_manager, &command.args).await
+        lookup_process(&process_manager, process_name, directory).await
     };
 
     let process = process.ok_or_else(|| err_msg("Failed to find app to connect to"));
@@ -90,10 +103,14 @@ async fn connect_output(command: &IPCCommand, writer: impl AsyncWrite + Unpin) {
     }
 }
 
-async fn restart_app(command: &IPCCommand, writer: impl AsyncWrite + Unpin) {
+async fn restart_app(
+    process_name: &Option<String>,
+    directory: &str,
+    writer: impl AsyncWrite + Unpin,
+) {
     let process = {
         let process_manager = ProcessManager::global().read().await;
-        lookup_process(&process_manager, &command.args).await
+        lookup_process(&process_manager, process_name, directory).await
     };
 
     let process = process.ok_or_else(|| err_msg("Failed to find app to restart"));
@@ -108,12 +125,43 @@ async fn restart_app(command: &IPCCommand, writer: impl AsyncWrite + Unpin) {
     }
 }
 
-async fn lookup_process(process_manager: &ProcessManager, args: &[String]) -> Option<Process> {
-    let app = process_manager.find_app_for_directory(&args[1])?;
+async fn stop_app(app_name: &Option<String>, directory: &str, mut writer: impl AsyncWrite + Unpin) {
+    let mut process_manager = ProcessManager::global().write().await;
+    let app = {
+        match app_name {
+            Some(app_name) => process_manager.find_app_by_name(app_name),
+            None => process_manager.find_app_for_directory(directory),
+        }
+    }
+    .cloned();
 
-    match args[0].as_ref() {
-        "" => app.default_process().await,
-        name => app.find_process(name).await,
+    let response = match app {
+        Some(app) => {
+            app.stop().await;
+            (&mut process_manager).remove_app_by_name(app.name());
+            format!("Stopping {}", app.name())
+        }
+        None => "Failed to find app to stop".to_string(),
+    };
+
+    let json = serde_json::to_string(&IPCResponse::Status(response)).unwrap();
+
+    writer
+        .write_all(json.as_ref())
+        .await
+        .expect("Failed to send stop response")
+}
+
+async fn lookup_process(
+    process_manager: &ProcessManager,
+    process_name: &Option<String>,
+    directory: &str,
+) -> Option<Process> {
+    let app = process_manager.find_app_for_directory(directory)?;
+
+    match process_name {
+        Some(name) => app.find_process(name).await,
+        None => app.default_process().await,
     }
     .cloned()
 }

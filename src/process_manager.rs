@@ -38,7 +38,12 @@ impl ProcessManager {
         // Penultimate segment should contain app name
         let app_name = parts.rev().nth(1).unwrap_or(hostname);
 
+        self.find_app_by_name(app_name)
+    }
+
+    pub(crate) fn find_app_by_name(&self, app_name: &str) -> Option<&App> {
         eprintln!("Looking for app {}", app_name);
+
         self.apps.iter().find(|app| app.name() == app_name)
     }
 
@@ -89,6 +94,10 @@ impl ProcessManager {
 
             return;
         }
+    }
+
+    pub(crate) fn remove_app_by_name(&mut self, app_name: &str) {
+        self.apps.retain(|a| a.name() != app_name);
     }
 }
 

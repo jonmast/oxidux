@@ -11,14 +11,20 @@ use crate::ipc_response::IPCResponse;
 type ClientResult<T> = Result<T, Error>;
 type EmptyResult = ClientResult<()>;
 
-pub fn restart_process(process_name: &str) -> EmptyResult {
-    let command = IPCCommand::restart_command(process_name.to_string(), current_dir()?);
+pub fn restart_process(process_name: Option<&str>) -> EmptyResult {
+    let command = IPCCommand::restart_command(process_name.map(str::to_string), current_dir()?);
     send_command(&command)?;
     Ok(())
 }
 
-pub fn connect_to_process(process_name: &str) -> EmptyResult {
-    let command = IPCCommand::connect_command(process_name.to_string(), current_dir()?);
+pub fn connect_to_process(process_name: Option<&str>) -> EmptyResult {
+    let command = IPCCommand::connect_command(process_name.map(str::to_string), current_dir()?);
+    send_command(&command)?;
+    Ok(())
+}
+
+pub fn stop_app(app_name: Option<&str>) -> EmptyResult {
+    let command = IPCCommand::stop_command(app_name.map(str::to_string), current_dir()?);
     send_command(&command)?;
     Ok(())
 }
@@ -50,6 +56,7 @@ fn send_command(command: &IPCCommand) -> EmptyResult {
                 bail!("Tmux reported Error");
             }
         }
+        IPCResponse::Status(message) => println!("{}", message),
         IPCResponse::NotFound(message) => eprintln!("Server returned error: {}", message),
     }
 
