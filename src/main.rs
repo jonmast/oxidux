@@ -1,7 +1,7 @@
 use clap::{App, AppSettings, Arg, SubCommand};
 use oxidux::config;
 
-fn main() -> Result<(), failure::Error> {
+fn main() -> color_eyre::Result<()> {
     let matches = App::new("oxidux")
         .about("Manage processes in development")
         .subcommand(

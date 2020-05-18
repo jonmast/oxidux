@@ -1,4 +1,4 @@
-use failure::ResultExt;
+use eyre::Context;
 use std::collections::HashMap;
 use std::fs::{create_dir, File};
 use std::io::prelude::*;
@@ -61,9 +61,7 @@ impl Config {
     }
 }
 
-async fn read_app_config(
-    entry: tokio::io::Result<tokio::fs::DirEntry>,
-) -> Result<App, failure::Error> {
+async fn read_app_config(entry: tokio::io::Result<tokio::fs::DirEntry>) -> color_eyre::Result<App> {
     let path = entry.context("Error reading directory entry")?.path();
     let mut file = AsyncFile::open(&path)
         .await

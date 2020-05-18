@@ -48,7 +48,7 @@ impl IPCCommand {
     }
 }
 
-pub fn ping_server() -> Result<String, failure::Error> {
+pub fn ping_server() -> color_eyre::Result<String> {
     let mut socket = UnixStream::connect(config::socket_path())?;
 
     // Ensure we don't hang indefinitely

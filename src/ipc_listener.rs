@@ -1,7 +1,8 @@
 use crate::config;
 use crate::ipc_command::IPCCommand;
 
-use failure::{err_msg, Error};
+use color_eyre::Result;
+use eyre::{eyre, Context};
 use futures::StreamExt;
 use std::str;
 use tokio::fs;
@@ -16,16 +17,24 @@ use crate::process_manager::ProcessManager;
 fn read_command(mut connection: UnixStream) {
     tokio::spawn(async move {
         let (reader, writer) = connection.split();
-        let mut msg = vec![];
-
         let mut reader = BufReader::new(reader);
 
-        reader.read_until(b'\n', &mut msg).await.unwrap();
-        let command =
-            parse_incoming_command(&msg).expect("Failed to parse command, is it valid JSON?");
+        let command = parse_command(&mut reader).await;
 
-        run_command(&command, writer).await;
+        match command {
+            Ok(command) => run_command(&command, writer).await,
+            Err(e) => eprintln!("{:#}", e),
+        }
     });
+}
+
+async fn parse_command(reader: &mut (impl AsyncBufRead + Unpin)) -> color_eyre::Result<IPCCommand> {
+    let mut msg = vec![];
+    reader
+        .read_until(b'\n', &mut msg)
+        .await
+        .context("Failed to read from IPC socket")?;
+    parse_incoming_command(&msg).context("Failed to parse command, is it valid JSON?")
 }
 
 async fn run_command<T>(command: &IPCCommand, writer: T)
@@ -49,7 +58,7 @@ where
     }
 }
 
-fn parse_incoming_command(buf: &[u8]) -> Result<IPCCommand, Error> {
+fn parse_incoming_command(buf: &[u8]) -> Result<IPCCommand> {
     let raw_json = str::from_utf8(&buf)?;
 
     let command: IPCCommand = serde_json::from_str(raw_json)?;
@@ -75,14 +84,13 @@ pub fn start_ipc_sock() {
     tokio::spawn(listener);
 }
 
-async fn send_response<T>(process: &Result<Process, Error>, mut writer: T)
+async fn process_response<T>(process: &Result<Process>, mut writer: T) -> color_eyre::Result<()>
 where
     T: AsyncWrite + Unpin,
 {
     let response = IPCResponse::for_process(process).await;
 
-    let json = serde_json::to_string(&response).unwrap();
-    writer.write_all(&json.as_ref()).await.unwrap();
+    write_response(&mut writer, &response).await
 }
 
 async fn connect_output(
@@ -95,8 +103,8 @@ async fn connect_output(
         lookup_process(&process_manager, process_name, directory).await
     };
 
-    let process = process.ok_or_else(|| err_msg("Failed to find app to connect to"));
-    send_response(&process, writer).await;
+    let process = process.ok_or_else(|| eyre!("Failed to find app to connect to"));
+    print_error(process_response(&process, writer).await);
 
     if let Err(e) = process {
         eprintln!("{}", e);
@@ -113,9 +121,9 @@ async fn restart_app(
         lookup_process(&process_manager, process_name, directory).await
     };
 
-    let process = process.ok_or_else(|| err_msg("Failed to find app to restart"));
+    let process = process.ok_or_else(|| eyre!("Failed to find app to restart"));
 
-    send_response(&process, writer).await;
+    print_error(process_response(&process, writer).await);
 
     match process {
         Ok(process) => {
@@ -144,12 +152,23 @@ async fn stop_app(app_name: &Option<String>, directory: &str, mut writer: impl A
         None => "Failed to find app to stop".to_string(),
     };
 
-    let json = serde_json::to_string(&IPCResponse::Status(response)).unwrap();
+    if let Err(e) = write_response(&mut writer, &IPCResponse::Status(response)).await {
+        eprintln!("{:#}", e);
+    }
+}
+
+async fn write_response(
+    writer: &mut (impl AsyncWrite + Unpin),
+    response: &IPCResponse,
+) -> color_eyre::Result<()> {
+    let json = serde_json::to_string(response)?;
 
     writer
         .write_all(json.as_ref())
         .await
-        .expect("Failed to send stop response")
+        .with_context(|| format!("Failed to send response {}", json))?;
+
+    Ok(())
 }
 
 async fn lookup_process(
@@ -171,4 +190,11 @@ async fn heartbeat_response(mut writer: impl AsyncWrite + Unpin) {
         .write_all(b"pong")
         .await
         .expect("Failed to send heartbeat response")
+}
+
+fn print_error(error: color_eyre::Result<()>) {
+    match error {
+        Ok(()) => {}
+        Err(e) => eprintln!("{:#}", e),
+    }
 }

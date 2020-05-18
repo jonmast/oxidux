@@ -32,24 +32,31 @@ async fn error_response(error: &hyper::Error, app: &App) -> Response<Body> {
 }
 
 pub async fn start_server(config: Config, shutdown_handler: impl Future<Output = ()>) {
-    let (addr, server) = if let Ok(listener) = get_activation_socket() {
+    let (addr, server): (_, color_eyre::Result<_>) = if let Ok(listener) = get_activation_socket() {
         let addr = listener.local_addr().unwrap();
-        (addr, Server::from_tcp(listener).unwrap())
+        (addr, Server::from_tcp(listener).map_err(|e| e.into()))
     } else {
+        use eyre::WrapErr;
         let addr = &build_address(&config);
-        (*addr, Server::bind(addr))
+        (
+            *addr,
+            Server::try_bind(addr).context("Failed to start proxy on specified port"),
+        )
     };
 
     eprintln!("Starting proxy server on {}", addr);
 
     let proxy = make_service_fn(|_| async move {
-        Ok::<_, hyper::Error>(service_fn(move |req| {
+        Ok::<_, eyre::Error>(service_fn(move |req| {
             let client = Client::new();
             handle_request(req, client)
         }))
     });
 
-    let server = server.serve(proxy).with_graceful_shutdown(shutdown_handler);
+    let server = server
+        .unwrap()
+        .serve(proxy)
+        .with_graceful_shutdown(shutdown_handler);
 
     if let Err(e) = server.await {
         eprintln!("server error: {}", e);
@@ -57,17 +64,17 @@ pub async fn start_server(config: Config, shutdown_handler: impl Future<Output =
 }
 
 #[cfg(not(target_os = "macos"))]
-fn get_activation_socket() -> Result<TcpListener, failure::Error> {
+fn get_activation_socket() -> color_eyre::Result<TcpListener> {
     let mut listenfd = listenfd::ListenFd::from_env();
     listenfd
         .take_tcp_listener(0)?
-        .ok_or_else(|| failure::err_msg("No socket provided"))
+        .ok_or_else(|| eyre::eyre!("No socket provided"))
 }
 
 #[cfg(target_os = "macos")]
 mod launchd;
 #[cfg(target_os = "macos")]
-fn get_activation_socket() -> Result<TcpListener, failure::Error> {
+fn get_activation_socket() -> color_eyre::Result<TcpListener> {
     let result = launchd::get_activation_socket("HttpSocket");
 
     result.map_err(|e| e.into())
@@ -76,7 +83,7 @@ fn get_activation_socket() -> Result<TcpListener, failure::Error> {
 async fn handle_request(
     mut request: Request<Body>,
     client: Client<HttpConnector>,
-) -> Result<Response<Body>, hyper::Error> {
+) -> color_eyre::Result<Response<Body>> {
     let host = request.headers().get("HOST").unwrap().to_str().unwrap();
     eprintln!("Serving request for host {:?}", host);
     eprintln!("Full req URI {}", request.uri());
@@ -92,7 +99,7 @@ async fn handle_request(
     };
 
     if meta_server::is_meta_request(&request) {
-        return Ok(meta_server::handle_request(request, app).await);
+        return meta_server::handle_request(request, app).await;
     }
 
     let destination_url = app_url(&app, request.uri());

@@ -1,4 +1,4 @@
-use failure::{bail, err_msg, Error, ResultExt};
+use eyre::{bail, eyre, Context};
 use std::env;
 use std::io::Write;
 use std::os::unix::net::UnixStream;
@@ -8,7 +8,7 @@ use crate::config;
 use crate::ipc_command::IPCCommand;
 use crate::ipc_response::IPCResponse;
 
-type ClientResult<T> = Result<T, Error>;
+type ClientResult<T> = color_eyre::Result<T>;
 type EmptyResult = ClientResult<()>;
 
 pub fn restart_process(process_name: Option<&str>) -> EmptyResult {
@@ -68,6 +68,6 @@ fn current_dir() -> ClientResult<String> {
 
     Ok(current_dir_path
         .to_str()
-        .ok_or_else(|| err_msg("Current directory is an invalid string"))?
+        .ok_or_else(|| eyre!("Current directory is an invalid string"))?
         .to_string())
 }

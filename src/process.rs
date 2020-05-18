@@ -10,7 +10,7 @@ use nix::sys::signal::{self, Signal};
 use nix::sys::stat;
 use nix::unistd::{self, Pid};
 
-use failure::{bail, err_msg, format_err, ResultExt};
+use eyre::{bail, eyre, Context};
 use tokio::{
     fs::File,
     stream::{Stream, StreamExt},
@@ -81,7 +81,7 @@ impl Process {
             .map_err(|e| format!("Cleaning up old tmux session failed with error {}", e))
     }
 
-    async fn respawn_tmux_session(&self) -> Result<(), failure::Error> {
+    async fn respawn_tmux_session(&self) -> color_eyre::Result<()> {
         let session_name = self.tmux_session().await;
         let shell_args = self.shell_args();
 
@@ -107,11 +107,11 @@ impl Process {
                     }
                 }
             })
-            .ok_or_else(|| err_msg("Failed to find PID for session"))?;
+            .ok_or_else(|| eyre!("Failed to find PID for session"))?;
 
         self.set_pid(
             pid.parse()
-                .map_err(|_| format_err!("\"{}\" is not a valid pid", pid))?,
+                .with_context(|| format!("\"{}\" is not a valid pid", pid))?,
         )
         .await;
 
@@ -164,7 +164,7 @@ impl Process {
 
     /// Capture process output for our logging system
     async fn pipe_output(&self) -> Result<(), String> {
-        let fifo_path = self.setup_fifo().await;
+        let fifo_path = self.setup_fifo().await.map_err(|e| e.to_string())?;
 
         tmux::pipe_pane(&fifo_path)
             .await
@@ -177,13 +177,14 @@ impl Process {
         Ok(())
     }
 
-    async fn setup_fifo(&self) -> PathBuf {
+    async fn setup_fifo(&self) -> color_eyre::Result<PathBuf> {
         let path = config::config_dir().join(self.app_name().await + ".pipe");
         fs::remove_file(&path).ok();
 
-        unistd::mkfifo(&path, stat::Mode::S_IRWXU).unwrap();
+        unistd::mkfifo(&path, stat::Mode::S_IRWXU)
+            .wrap_err("Failed to set up process output fifo")?;
 
-        path
+        Ok(path)
     }
 
     pub async fn restart(&self) {

@@ -105,7 +105,7 @@ struct HelperCommand {
 }
 
 impl HelperCommand {
-    fn run_echo_server(port: u16) -> Result<Self, failure::Error> {
+    fn run_echo_server(port: u16) -> color_eyre::Result<Self> {
         let helper_exe = test_process_path("echo-server");
         use std::process::Command;
 

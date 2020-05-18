@@ -10,7 +10,7 @@ use std::env;
 use std::{convert::Infallible, net::SocketAddr};
 
 #[tokio::main]
-async fn main() -> Result<(), failure::Error> {
+async fn main() -> color_eyre::Result<()> {
     let port = env::var("PORT")?.parse()?;
     // Test server that we're proxying to
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
@@ -53,7 +53,7 @@ impl EchoResponse {
     }
 }
 
-async fn handle(mut request: Request<Body>) -> Result<Response<Body>, failure::Error> {
+async fn handle(mut request: Request<Body>) -> color_eyre::Result<Response<Body>> {
     let response_json = serde_json::to_string(&EchoResponse::from_request(&mut request).await)?;
     Ok(Response::new(Body::from(response_json)))
 }

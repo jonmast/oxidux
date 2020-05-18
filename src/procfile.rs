@@ -98,8 +98,7 @@ mod tests {
         let result = parse_procfile_in_dir(
             temp_dir
                 .to_str()
-                .ok_or_else(|| failure::err_msg("Temp directory is an invalid string"))
-                .unwrap(),
+                .expect("Temp directory is an invalid string"),
         );
 
         let mut expected = HashMap::new();
@@ -115,8 +114,7 @@ mod tests {
         let result = parse_procfile_in_dir(
             temp_dir
                 .to_str()
-                .ok_or_else(|| failure::err_msg("Temp directory is an invalid string"))
-                .unwrap(),
+                .expect("Temp directory is an invalid string"),
         );
 
         let expected = HashMap::new();
@@ -135,8 +133,7 @@ mod tests {
         let result = parse_procfile_in_dir(
             temp_dir
                 .to_str()
-                .ok_or_else(|| failure::err_msg("Temp directory is an invalid string"))
-                .unwrap(),
+                .expect("Temp directory is an invalid string"),
         );
 
         let mut expected = HashMap::new();
