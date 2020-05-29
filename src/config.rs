@@ -21,23 +21,8 @@ pub struct Config {
 }
 
 impl Config {
-    /// Retrieve app config for a hostname
-    ///
-    /// Searches through configs on disk to find the best match
-    pub async fn find_app_by_host(&self, hostname: &str) -> Option<App> {
-        // TODO: unify with process_manager logic and make more robust with subdomains, etc
-        let parts = hostname.split('.');
-        let app_name = parts.rev().nth(1).unwrap_or(hostname);
-
-        for app in self.app_configs().await {
-            if app.name == app_name {
-                return Some(app);
-            }
-        }
-        None
-    }
-
-    async fn app_configs(&self) -> Vec<App> {
+    /// Read app configs from disk and return them as a Vec
+    pub(crate) async fn app_configs(&self) -> Vec<App> {
         let app_config_dir = self.general.config_dir.join("apps");
         let mut results = Vec::new();
         match async_read_dir(app_config_dir).await {
@@ -132,6 +117,8 @@ pub struct App {
     pub headers: HashMap<String, String>,
     #[serde(flatten)]
     pub command_config: CommandConfig,
+    #[serde(default)]
+    pub aliases: Vec<String>,
 }
 
 impl App {
@@ -156,6 +143,10 @@ impl App {
 
     pub fn commands(&self) -> HashMap<String, String> {
         self.command_config.commands(self.full_path())
+    }
+
+    pub(crate) fn domains(&self) -> impl Iterator<Item = &String> {
+        std::iter::once(&self.name).chain(self.aliases.iter())
     }
 }
 
@@ -222,7 +213,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn find_app_by_host_test() {
+    async fn load_app_config() {
         let tmp = test_utils::temp_dir();
         let app_dir = tmp.join("apps");
         create_dir(&app_dir).unwrap();
@@ -248,7 +239,9 @@ command = '/bin/true'
             general: proxy_config,
         };
 
-        let found_app = config.find_app_by_host("testapp.test").await.unwrap();
+        let configs = config.app_configs().await;
+        assert_eq!(1, configs.len());
+        let found_app = &configs[0];
         assert_eq!(
             CommandConfig::Command("/bin/true".to_string()),
             found_app.command_config

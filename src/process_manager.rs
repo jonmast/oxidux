@@ -32,15 +32,6 @@ impl ProcessManager {
             .expect("Attempted to use ProcessManager before it was initalized")
     }
 
-    /// Find the app associated with a given hostname
-    pub fn find_app(&self, hostname: &str) -> Option<&App> {
-        let parts = hostname.split('.');
-        // Penultimate segment should contain app name
-        let app_name = parts.rev().nth(1).unwrap_or(hostname);
-
-        self.find_app_by_name(app_name)
-    }
-
     pub(crate) fn find_app_by_name(&self, app_name: &str) -> Option<&App> {
         eprintln!("Looking for app {}", app_name);
 
@@ -98,36 +89,5 @@ impl ProcessManager {
 
     pub(crate) fn remove_app_by_name(&mut self, app_name: &str) {
         self.apps.retain(|a| a.name() != app_name);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config;
-    use std::collections::HashMap;
-
-    #[test]
-    fn find_app_with_subdomain() {
-        let config = config::Config::default();
-        let app_config = config::App {
-            name: "the_app".into(),
-            directory: "".into(),
-            port: None,
-            command_config: config::CommandConfig::Command("".to_string()),
-            headers: HashMap::default(),
-        };
-
-        let app = App::from_config(&app_config, 0, "test".to_string());
-        let process_manager = ProcessManager {
-            apps: vec![app],
-            config,
-        };
-
-        let found_app = process_manager
-            .find_app("subdomain.the_app.test")
-            .expect("Failed to find app by hostname");
-
-        assert!(found_app.name() == "the_app")
     }
 }

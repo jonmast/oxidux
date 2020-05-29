@@ -165,9 +165,8 @@ mod tests {
         let config = config::App {
             name: "testapp".to_string(),
             command_config: config::CommandConfig::Procfile,
-            directory: "".to_string(),
             port: Some(42),
-            headers: Default::default(),
+            ..Default::default()
         };
         let app = App::from_config(&config, 0, "test".to_string());
         let source_uri = "http://testapp.test/path?query=true".parse().unwrap();

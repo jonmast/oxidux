@@ -16,6 +16,7 @@ pub struct App {
     headers: hyper::HeaderMap,
     pub processes: Vec<Process>,
     tld: String,
+    aliases: Vec<String>,
 }
 
 impl App {
@@ -36,6 +37,7 @@ impl App {
             headers: app_config.parsed_headers(),
             processes,
             tld,
+            aliases: app_config.aliases.clone(),
         }
     }
 
@@ -109,5 +111,9 @@ impl App {
         let streams = join_all(self.processes.iter().map(Process::register_output_watcher)).await;
 
         futures::stream::select_all(streams)
+    }
+
+    pub fn domains(&self) -> impl Iterator<Item = &String> + '_ {
+        std::iter::once(&self.name).chain(self.aliases.iter())
     }
 }
