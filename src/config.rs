@@ -184,7 +184,10 @@ pub fn config_dir() -> PathBuf {
     let dir = home_dir.join(".oxidux");
 
     if !dir.is_dir() {
-        create_dir(&dir).expect("Error creating config directory");
+        let result = create_dir(&dir);
+        if result.is_err() && !dir.is_dir() {
+            result.expect("Error creating config directory");
+        }
     }
 
     dir
