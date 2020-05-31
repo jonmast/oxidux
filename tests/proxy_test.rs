@@ -5,11 +5,10 @@ use oxidux::config::{Config, ProxyConfig};
 use oxidux::process_manager::ProcessManager;
 use std::env;
 use std::fs::{create_dir, File};
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::sync::oneshot;
-use tokio::time::delay_for;
 
 #[path = "./helpers/test_utils.rs"]
 mod test_utils;
@@ -80,9 +79,6 @@ command = 'sleep 10; {}'
         .body(Body::from(greeting))
         .unwrap();
 
-    // Add an arbitrary delay to give the server time to boot
-    delay_for(Duration::from_millis(100)).await;
-
     let response = tokio::time::timeout(Duration::from_secs(1), client.request(request))
         .await
         .unwrap()
@@ -107,13 +103,26 @@ struct HelperCommand {
 impl HelperCommand {
     fn run_echo_server(port: u16) -> color_eyre::Result<Self> {
         let helper_exe = test_process_path("echo-server");
-        use std::process::Command;
+        use std::process::{Command, Stdio};
 
-        let child = Command::new(&helper_exe.unwrap())
+        let mut child = Command::new(&helper_exe.unwrap())
             .env("PORT", port.to_string())
+            .stdout(Stdio::piped())
             .spawn()?;
 
-        Ok(Self { process: child })
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| eyre::eyre!("STDOUT is missing"))?;
+
+        let mut reader = BufReader::new(stdout);
+        let mut buffer = String::new();
+        loop {
+            reader.read_line(&mut buffer)?;
+            if buffer == "Running\n" {
+                return Ok(Self { process: child });
+            }
+        }
     }
 }
 

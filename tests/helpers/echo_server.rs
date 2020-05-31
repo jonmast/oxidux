@@ -18,6 +18,8 @@ async fn main() -> color_eyre::Result<()> {
 
     let server = Server::bind(&addr).serve(make_svc);
 
+    println!("Running");
+
     if let Err(e) = server.await {
         eprintln!("Error spawning test server: {}", e);
     }
