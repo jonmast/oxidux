@@ -105,6 +105,8 @@ async fn handle_request(
     let destination_url = app_url(&app, request.uri());
     *request.uri_mut() = destination_url;
 
+    app.touch().await;
+
     // Apply header overrides from config
     request.headers_mut().extend(app.headers().clone());
 

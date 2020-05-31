@@ -12,6 +12,7 @@ pub struct ProcessManager {
 }
 
 const PORT_START: u16 = 7500;
+const MONITORING_INTERVAL_SECS: u64 = 30;
 static INSTANCE: OnceCell<RwLock<ProcessManager>> = OnceCell::new();
 
 impl ProcessManager {
@@ -24,6 +25,30 @@ impl ProcessManager {
 
         let config = config.clone();
         ProcessManager { apps, config }
+    }
+
+    /// Start a loop to check for and purge any apps that are idled
+    pub(crate) async fn monitor_idle_timeout() {
+        loop {
+            delay_for(Duration::from_secs(MONITORING_INTERVAL_SECS)).await;
+            let process_manager = Self::global().read().await;
+            let idle_timout_secs = process_manager.config().general.idle_timeout_secs;
+            let mut expired_apps = Vec::new();
+            for app in &process_manager.apps {
+                if app.last_hit().await.elapsed().as_secs() > idle_timout_secs {
+                    eprintln!("App {} is idle, removing it", app.name());
+                    app.stop().await;
+                    expired_apps.push(app.name().to_string());
+                }
+            }
+
+            drop(process_manager);
+
+            for app_name in expired_apps {
+                let mut process_manager = Self::global().write().await;
+                process_manager.remove_app_by_name(&app_name);
+            }
+        }
     }
 
     pub(crate) fn global() -> &'static RwLock<ProcessManager> {

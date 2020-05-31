@@ -1,5 +1,9 @@
+use std::sync::Arc;
+use std::time::Instant;
+
 use futures::future::join_all;
 use futures::Stream;
+use tokio::sync::RwLock;
 
 use crate::config;
 use crate::process::Process;
@@ -9,14 +13,23 @@ const DEFAULT_PROCESS: &str = "web";
 
 #[derive(Clone, Debug)]
 pub struct App {
+    /// App name. This serves as the primary app domain as well as a unique identifer.
     name: String,
+    /// Port app server process binds to
     port: u16,
+    /// App working directory
     directory: String,
     command_config: config::CommandConfig,
+    /// Headers added to proxied request to the app
     headers: hyper::HeaderMap,
+    /// List of processes for this app
     pub processes: Vec<Process>,
+    /// Domain TLD suffix, defaults to ".test"
     tld: String,
+    /// Alternate domain names for app
     aliases: Vec<String>,
+    /// Last time app was accessed
+    last_hit: Arc<RwLock<Instant>>,
 }
 
 impl App {
@@ -38,6 +51,7 @@ impl App {
             processes,
             tld,
             aliases: app_config.aliases.clone(),
+            last_hit: Arc::new(RwLock::new(Instant::now())),
         }
     }
 
@@ -115,5 +129,15 @@ impl App {
 
     pub fn domains(&self) -> impl Iterator<Item = &String> + '_ {
         std::iter::once(&self.name).chain(self.aliases.iter())
+    }
+
+    /// Last time app was accessed
+    pub(crate) async fn last_hit(&self) -> Instant {
+        *self.last_hit.read().await
+    }
+
+    /// Refresh the last hit time
+    pub(crate) async fn touch(&self) {
+        *self.last_hit.write().await = Instant::now();
     }
 }

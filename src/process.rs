@@ -207,7 +207,7 @@ impl Process {
     }
 
     pub async fn stop(&self) {
-        eprintln!("Stopping process {}", self.app_name().await);
+        eprintln!("Stopping process {}", self.name().await);
 
         match self.send_signal(Signal::SIGINT).await {
             Ok(_) => {

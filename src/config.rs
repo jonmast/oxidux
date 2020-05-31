@@ -68,7 +68,11 @@ fn default_domain() -> String {
     "test".to_string()
 }
 
-#[derive(Deserialize, Debug, Default, Clone)]
+fn default_idle_timeout_secs() -> u64 {
+    3600
+}
+
+#[derive(Deserialize, Debug, Clone)]
 pub struct ProxyConfig {
     pub proxy_port: u16,
     #[serde(default = "default_dns_port")]
@@ -77,6 +81,20 @@ pub struct ProxyConfig {
     pub domain: String,
     #[serde(default = "config_dir")]
     pub config_dir: PathBuf,
+    #[serde(default = "default_idle_timeout_secs")]
+    pub idle_timeout_secs: u64,
+}
+
+impl Default for ProxyConfig {
+    fn default() -> Self {
+        Self {
+            proxy_port: 0,
+            dns_port: default_dns_port(),
+            domain: default_domain(),
+            config_dir: config_dir(),
+            idle_timeout_secs: default_idle_timeout_secs(),
+        }
+    }
 }
 
 #[derive(Deserialize, Debug, Clone, Eq, PartialEq)]

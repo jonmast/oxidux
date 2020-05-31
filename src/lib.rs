@@ -48,6 +48,8 @@ pub fn run_server(config: Config) {
     runtime.block_on(async {
         ProcessManager::initialize(&config);
 
+        tokio::spawn(ProcessManager::monitor_idle_timeout());
+
         let shutdown_rx = signals::ctrlc_listener();
 
         ipc_listener::start_ipc_sock();
