@@ -1,52 +1,28 @@
 #![warn(clippy::all)]
 
-use tokio::runtime::Runtime;
-use tokio::signal;
-use tokio::sync::oneshot;
+use std::time::Duration;
 
-mod proxy;
+use tokio::runtime::Runtime;
+
+pub mod proxy;
 
 mod app;
 mod process;
-mod process_manager;
+pub mod process_manager;
 use crate::process_manager::ProcessManager;
 pub mod config;
 use crate::config::Config;
 pub mod client;
 #[cfg(target_os = "macos")]
 mod dns;
+mod host_resolver;
 pub mod ipc_command;
 mod ipc_listener;
 mod ipc_response;
 mod output;
 mod procfile;
-
-async fn ctrlc_listener(process_manager: ProcessManager) {
-    let (tx, rx) = oneshot::channel::<()>();
-
-    let mut shutdown_tx = Some(tx);
-
-    let signal_handler = async move {
-        loop {
-            signal::ctrl_c().await.unwrap();
-
-            if let Some(tx) = shutdown_tx.take() {
-                eprintln!("Gracefully shutting down");
-
-                process_manager.shutdown();
-
-                tx.send(()).unwrap();
-            } else {
-                eprintln!("Forcibly shutting down");
-                std::process::exit(1);
-            }
-        }
-    };
-
-    tokio::spawn(signal_handler);
-
-    rx.await.ok();
-}
+mod signals;
+mod tmux;
 
 fn server_running() -> bool {
     if let Ok(response) = ipc_command::ping_server() {
@@ -70,13 +46,21 @@ pub fn run_server(config: Config) {
     });
 
     runtime.block_on(async {
-        let process_manager = ProcessManager::new(&config);
+        ProcessManager::initialize(&config);
 
-        let shutdown_rx = ctrlc_listener(process_manager.clone());
+        tokio::spawn(ProcessManager::monitor_idle_timeout());
 
-        ipc_listener::start_ipc_sock(process_manager.clone());
+        let shutdown_rx = signals::ctrlc_listener();
 
-        println!("Spinning up server");
-        proxy::start_server(config, process_manager, shutdown_rx).await
+        ipc_listener::start_ipc_sock();
+
+        proxy::start_server(config, shutdown_rx).await;
     });
+
+    runtime.shutdown_timeout(Duration::from_millis(500));
 }
+
+// File for shared helpers between integration and unit tests
+#[cfg(test)]
+#[path = "../tests/helpers/test_utils.rs"]
+mod test_utils;

@@ -51,6 +51,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils;
 
     #[test]
     fn test_single_command() {
@@ -87,36 +88,18 @@ mod tests {
         assert_eq!(result, expected);
     }
 
-    fn with_tmpdir<F, T>(f: F) -> T
-    where
-        F: FnOnce(&PathBuf) -> Result<T, failure::Error>,
-    {
-        // Generate unique id since tests run concurrently
-        let unique_id: u32 = rand::random();
-        let temp_dir = std::env::temp_dir().join(format!("oxidux_procfile_test_{}", unique_id));
-        std::fs::create_dir(&temp_dir).unwrap();
-
-        let result = f(&temp_dir);
-
-        std::fs::remove_dir_all(&temp_dir).unwrap();
-
-        result.unwrap()
-    }
-
     #[test]
     fn test_procfile_in_dir() {
-        let result = with_tmpdir(|temp_dir: &PathBuf| {
-            let mut file = std::fs::File::create(temp_dir.join("Procfile"))?;
-            file.write_all(b"proc_name: some command\n")?;
+        let temp_dir = test_utils::temp_dir();
 
-            let result = parse_procfile_in_dir(
-                temp_dir
-                    .to_str()
-                    .ok_or_else(|| failure::err_msg("Temp directory is an invalid string"))?,
-            );
+        let mut file = std::fs::File::create(temp_dir.join("Procfile")).unwrap();
+        file.write_all(b"proc_name: some command\n").unwrap();
 
-            Ok(result)
-        });
+        let result = parse_procfile_in_dir(
+            temp_dir
+                .to_str()
+                .expect("Temp directory is an invalid string"),
+        );
 
         let mut expected = HashMap::new();
         expected.insert("proc_name".to_string(), "some command".to_string());
@@ -126,15 +109,13 @@ mod tests {
 
     #[test]
     fn test_dir_no_procfile() {
-        let result = with_tmpdir(|temp_dir: &PathBuf| {
-            let result = parse_procfile_in_dir(
-                temp_dir
-                    .to_str()
-                    .ok_or_else(|| failure::err_msg("Temp directory is an invalid string"))?,
-            );
+        let temp_dir = test_utils::temp_dir();
 
-            Ok(result)
-        });
+        let result = parse_procfile_in_dir(
+            temp_dir
+                .to_str()
+                .expect("Temp directory is an invalid string"),
+        );
 
         let expected = HashMap::new();
 
@@ -143,20 +124,17 @@ mod tests {
 
     #[test]
     fn test_dev_procfile() {
-        let result = with_tmpdir(|temp_dir: &PathBuf| {
-            let mut dev_file = std::fs::File::create(temp_dir.join("Procfile.dev"))?;
-            dev_file.write_all(b"dev: development command\n")?;
-            let mut prod_file = std::fs::File::create(temp_dir.join("Procfile"))?;
-            prod_file.write_all(b"prod: production command\n")?;
+        let temp_dir = test_utils::temp_dir();
+        let mut dev_file = std::fs::File::create(temp_dir.join("Procfile.dev")).unwrap();
+        dev_file.write_all(b"dev: development command\n").unwrap();
+        let mut prod_file = std::fs::File::create(temp_dir.join("Procfile")).unwrap();
+        prod_file.write_all(b"prod: production command\n").unwrap();
 
-            let result = parse_procfile_in_dir(
-                temp_dir
-                    .to_str()
-                    .ok_or_else(|| failure::err_msg("Temp directory is an invalid string"))?,
-            );
-
-            Ok(result)
-        });
+        let result = parse_procfile_in_dir(
+            temp_dir
+                .to_str()
+                .expect("Temp directory is an invalid string"),
+        );
 
         let mut expected = HashMap::new();
         expected.insert("dev".to_string(), "development command".to_string());

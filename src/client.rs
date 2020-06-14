@@ -1,5 +1,4 @@
-use failure::{bail, err_msg, Error, ResultExt};
-use serde_json;
+use eyre::{bail, eyre, Context};
 use std::env;
 use std::io::Write;
 use std::os::unix::net::UnixStream;
@@ -9,17 +8,23 @@ use crate::config;
 use crate::ipc_command::IPCCommand;
 use crate::ipc_response::IPCResponse;
 
-type ClientResult<T> = Result<T, Error>;
+type ClientResult<T> = color_eyre::Result<T>;
 type EmptyResult = ClientResult<()>;
 
-pub fn restart_process(process_name: &str) -> EmptyResult {
-    let command = IPCCommand::restart_command(process_name.to_string(), current_dir()?);
+pub fn restart_process(process_name: Option<&str>) -> EmptyResult {
+    let command = IPCCommand::restart_command(process_name.map(str::to_string), current_dir()?);
     send_command(&command)?;
     Ok(())
 }
 
-pub fn connect_to_process(process_name: &str) -> EmptyResult {
-    let command = IPCCommand::connect_command(process_name.to_string(), current_dir()?);
+pub fn connect_to_process(process_name: Option<&str>) -> EmptyResult {
+    let command = IPCCommand::connect_command(process_name.map(str::to_string), current_dir()?);
+    send_command(&command)?;
+    Ok(())
+}
+
+pub fn stop_app(app_name: Option<&str>) -> EmptyResult {
+    let command = IPCCommand::stop_command(app_name.map(str::to_string), current_dir()?);
     send_command(&command)?;
     Ok(())
 }
@@ -51,6 +56,7 @@ fn send_command(command: &IPCCommand) -> EmptyResult {
                 bail!("Tmux reported Error");
             }
         }
+        IPCResponse::Status(message) => println!("{}", message),
         IPCResponse::NotFound(message) => eprintln!("Server returned error: {}", message),
     }
 
@@ -62,6 +68,6 @@ fn current_dir() -> ClientResult<String> {
 
     Ok(current_dir_path
         .to_str()
-        .ok_or_else(|| err_msg("Current directory is an invalid string"))?
+        .ok_or_else(|| eyre!("Current directory is an invalid string"))?
         .to_string())
 }

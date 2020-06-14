@@ -5,6 +5,8 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::{client::HttpConnector, Body, Client, Request, Response, Server, Uri};
 use url::Url;
 
+use crate::host_resolver;
+
 mod autostart_response;
 mod host_missing;
 mod meta_server;
@@ -13,51 +15,48 @@ use crate::{app::App, config::Config, process_manager::ProcessManager};
 
 const ERROR_MESSAGE: &str = "No response from server";
 
-fn error_response(error: &hyper::Error, app: &App) -> Response<Body> {
+async fn error_response(error: &hyper::Error, app: &App) -> Response<Body> {
     eprintln!("Request to backend failed with error \"{}\"", error);
 
-    if app.is_running() {
+    if app.is_running().await {
         let body = Body::from(ERROR_MESSAGE);
         Response::builder()
             .header("Content-Type", "text/plain; charset=utf-8")
             .body(body)
             .unwrap()
     } else {
-        app.start();
+        app.start().await;
 
         autostart_response::autostart_response()
     }
 }
 
-pub async fn start_server(
-    config: Config,
-    process_manager: ProcessManager,
-    shutdown_handler: impl Future<Output = ()>,
-) {
-    let (addr, server) = if let Ok(listener) = get_activation_socket() {
+pub async fn start_server(config: Config, shutdown_handler: impl Future<Output = ()>) {
+    let (addr, server): (_, color_eyre::Result<_>) = if let Ok(listener) = get_activation_socket() {
         let addr = listener.local_addr().unwrap();
-        (addr, Server::from_tcp(listener).unwrap())
+        (addr, Server::from_tcp(listener).map_err(|e| e.into()))
     } else {
+        use eyre::WrapErr;
         let addr = &build_address(&config);
-        (*addr, Server::bind(addr))
+        (
+            *addr,
+            Server::try_bind(addr).context("Failed to start proxy on specified port"),
+        )
     };
 
-    println!("Starting proxy server on {}", addr);
+    eprintln!("Starting proxy server on {}", addr);
 
-    let process_manager = process_manager.clone();
-
-    let proxy = make_service_fn(|_| {
-        let process_manager = process_manager.clone();
-        async move {
-            Ok::<_, hyper::Error>(service_fn(move |req| {
-                let client = Client::new();
-                let process_manager = process_manager.clone();
-                handle_request(req, client, process_manager)
-            }))
-        }
+    let proxy = make_service_fn(|_| async move {
+        Ok::<_, eyre::Error>(service_fn(move |req| {
+            let client = Client::new();
+            handle_request(req, client)
+        }))
     });
 
-    let server = server.serve(proxy).with_graceful_shutdown(shutdown_handler);
+    let server = server
+        .unwrap()
+        .serve(proxy)
+        .with_graceful_shutdown(shutdown_handler);
 
     if let Err(e) = server.await {
         eprintln!("server error: {}", e);
@@ -65,17 +64,17 @@ pub async fn start_server(
 }
 
 #[cfg(not(target_os = "macos"))]
-fn get_activation_socket() -> Result<TcpListener, failure::Error> {
+fn get_activation_socket() -> color_eyre::Result<TcpListener> {
     let mut listenfd = listenfd::ListenFd::from_env();
     listenfd
         .take_tcp_listener(0)?
-        .ok_or_else(|| failure::err_msg("No socket provided"))
+        .ok_or_else(|| eyre::eyre!("No socket provided"))
 }
 
 #[cfg(target_os = "macos")]
 mod launchd;
 #[cfg(target_os = "macos")]
-fn get_activation_socket() -> Result<TcpListener, failure::Error> {
+fn get_activation_socket() -> color_eyre::Result<TcpListener> {
     let result = launchd::get_activation_socket("HttpSocket");
 
     result.map_err(|e| e.into())
@@ -84,25 +83,29 @@ fn get_activation_socket() -> Result<TcpListener, failure::Error> {
 async fn handle_request(
     mut request: Request<Body>,
     client: Client<HttpConnector>,
-    process_manager: ProcessManager,
-) -> Result<Response<Body>, hyper::Error> {
+) -> color_eyre::Result<Response<Body>> {
     let host = request.headers().get("HOST").unwrap().to_str().unwrap();
     eprintln!("Serving request for host {:?}", host);
     eprintln!("Full req URI {}", request.uri());
 
-    let app = match process_manager.find_app(&host) {
-        Some(app) => app.clone(),
-        None => {
-            return Ok(host_missing::missing_host_response(host, &process_manager));
+    let app = {
+        match host_resolver::resolve(&host).await {
+            Some(app) => app.clone(),
+            None => {
+                let process_manager = ProcessManager::global().read().await;
+                return Ok(host_missing::missing_host_response(host, &process_manager).await);
+            }
         }
     };
 
     if meta_server::is_meta_request(&request) {
-        return Ok(meta_server::handle_request(request, app));
+        return meta_server::handle_request(request, app).await;
     }
 
     let destination_url = app_url(&app, request.uri());
     *request.uri_mut() = destination_url;
+
+    app.touch().await;
 
     // Apply header overrides from config
     request.headers_mut().extend(app.headers().clone());
@@ -115,7 +118,7 @@ async fn handle_request(
 
             Ok(response)
         }
-        Err(e) => Ok(error_response(&e, &app)),
+        Err(e) => Ok(error_response(&e, &app).await),
     }
 }
 
@@ -146,7 +149,6 @@ mod tests {
     #[test]
     fn build_bind_address_from_config() {
         let config = config::Config {
-            apps: Vec::new(),
             general: config::ProxyConfig {
                 proxy_port: 80,
                 ..Default::default()
@@ -165,9 +167,8 @@ mod tests {
         let config = config::App {
             name: "testapp".to_string(),
             command_config: config::CommandConfig::Procfile,
-            directory: "".to_string(),
             port: Some(42),
-            headers: Default::default(),
+            ..Default::default()
         };
         let app = App::from_config(&config, 0, "test".to_string());
         let source_uri = "http://testapp.test/path?query=true".parse().unwrap();

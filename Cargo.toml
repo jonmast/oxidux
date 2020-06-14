@@ -5,6 +5,7 @@ version = "0.3.1-alpha.0"
 authors = ["Jonathan Mast <jon@jonmast.com>"]
 license = "GPL-3.0-or-later"
 edition="2018"
+default-run = "oxidux"
 
 [package.metadata.release]
 tag-prefix = "v"
@@ -12,7 +13,7 @@ sign-commit = true
 
 [dependencies]
 futures = "0.3.1"
-tokio = { version = "0.2.4", features = ["tcp", "signal", "fs", "time", "uds", "io-util", "sync"] }
+tokio = { version = "0.2.4", features = ["tcp", "signal", "fs", "time", "uds", "io-util", "sync", "macros", "process"] }
 hyper = "0.13.0"
 url = "2.0.0"
 toml = "0.5"
@@ -22,11 +23,17 @@ clap = "2.32"
 nix = "0.17"
 dirs = "2.0"
 ansi_term = "0.12"
+eyre = "0.4.2"
 shellexpand = "2.0"
-failure = "0.1.5"
 listenfd = "0.3.3"
 regex = "1"
 libc = "0.2"
+once_cell = "1.3.1"
+color-eyre = "0.3.2"
+
+[[bin]]
+name = "echo-server"
+path = "tests/helpers/echo_server.rs"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 trust-dns-server = "0.19.3"

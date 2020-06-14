@@ -30,7 +30,7 @@ const TCP_TIMEOUT: u64 = 5;
 ///
 /// This is intended for use only with the MacOS resolver system, it can't be used as a regular DNS
 /// server to do real lookups.
-pub fn start_dns_server(port: u16, domain: &str, runtime: &Runtime) -> Result<(), failure::Error> {
+pub fn start_dns_server(port: u16, domain: &str, runtime: &Runtime) -> color_eyre::Result<()> {
     let dns_address = format!("127.0.0.1:{}", port);
     eprintln!("Starting DNS server on {}", dns_address);
     let mut catalog = Catalog::new();
