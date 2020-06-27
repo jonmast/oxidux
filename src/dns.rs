@@ -23,6 +23,8 @@ use trust_dns_server::{
     ServerFuture,
 };
 
+use crate::proxy::launchd;
+
 // This can probably be anything, it's built for DDOS prevention
 const TCP_TIMEOUT: u64 = 5;
 
@@ -32,7 +34,6 @@ const TCP_TIMEOUT: u64 = 5;
 /// server to do real lookups.
 pub fn start_dns_server(port: u16, domain: &str, runtime: &Runtime) -> color_eyre::Result<()> {
     let dns_address = format!("127.0.0.1:{}", port);
-    eprintln!("Starting DNS server on {}", dns_address);
     let mut catalog = Catalog::new();
 
     let name = Name::from_str(domain).unwrap();
@@ -43,10 +44,21 @@ pub fn start_dns_server(port: u16, domain: &str, runtime: &Runtime) -> color_eyr
 
     let mut server = ServerFuture::new(catalog);
     let address: SocketAddr = dns_address.parse().unwrap();
-    let udp_socket = UdpSocket::bind(&address)?;
+
+    let udp_socket =
+        launchd::get_udp_socket("DnsUdpSocket").or_else(|_| UdpSocket::bind(&address))?;
+    let tcp_listener =
+        launchd::get_tcp_socket("DnsTcpSocket").or_else(|_| TcpListener::bind(&address))?;
+
+    eprintln!(
+        "Starting DNS server on UDP {} / TCP {}",
+        udp_socket.local_addr().unwrap(),
+        tcp_listener.local_addr().unwrap()
+    );
+
     server.register_socket_std(udp_socket, runtime);
-    let tcp_listener = TcpListener::bind(&address)?;
     server.register_listener_std(tcp_listener, Duration::from_secs(TCP_TIMEOUT), runtime)?;
+
     Ok(())
 }
 
