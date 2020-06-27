@@ -3,6 +3,7 @@ use std::env;
 use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::process::Command;
+use std::time::Duration;
 
 use crate::config;
 use crate::ipc_command::IPCCommand;
@@ -32,6 +33,11 @@ pub fn stop_app(app_name: Option<&str>) -> EmptyResult {
 fn send_command(command: &IPCCommand) -> EmptyResult {
     let mut socket = UnixStream::connect(config::socket_path())
         .context("Failed to open socket. Is the server running?")?;
+
+    // Ensure we don't hang indefinitely if server is unresponsive
+    let timeout = Some(Duration::from_secs(5));
+    socket.set_read_timeout(timeout)?;
+    socket.set_write_timeout(timeout)?;
 
     serde_json::to_writer(&socket, &command)?;
     socket.write_all(b"\n")?;

@@ -20,7 +20,7 @@ pub(crate) async fn ctrlc_listener() {
 
                 timeout(
                     Duration::from_secs(10),
-                    ProcessManager::global().write().await.shutdown(),
+                    ProcessManager::global_write().await.shutdown(),
                 )
                 .await
                 .ok();

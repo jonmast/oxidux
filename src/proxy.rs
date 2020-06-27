@@ -92,7 +92,7 @@ async fn handle_request(
         match host_resolver::resolve(&host).await {
             Some(app) => app.clone(),
             None => {
-                let process_manager = ProcessManager::global().read().await;
+                let process_manager = ProcessManager::global_read().await;
                 return Ok(host_missing::missing_host_response(host, &process_manager).await);
             }
         }
