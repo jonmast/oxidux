@@ -1,5 +1,4 @@
 use std::env;
-use std::fs;
 use std::io::BufRead;
 use std::path::PathBuf;
 use std::str;
@@ -12,7 +11,7 @@ use nix::unistd::{self, Pid};
 
 use eyre::{bail, eyre, Context};
 use tokio::{
-    fs::File,
+    fs::{self, File},
     stream::{Stream, StreamExt},
     sync::{broadcast, RwLock, RwLockReadGuard, RwLockWriteGuard},
     time::timeout,
@@ -187,9 +186,10 @@ impl Process {
             .await
             .map_err(|_| "Failed to set up tmux output pipe")?;
 
-        let fifo =
-            fs::File::open(&fifo_path).map_err(|e| format!("Couldn't open FIFO, got {}", e))?;
-        Output::for_stream(File::from_std(fifo), self.clone());
+        let fifo = File::open(&fifo_path)
+            .await
+            .map_err(|e| format!("Couldn't open FIFO, got {}", e))?;
+        Output::for_stream(fifo, self.clone());
 
         Ok(())
     }
@@ -201,7 +201,7 @@ impl Process {
         };
 
         let path = config::config_dir().join(pipe_name);
-        fs::remove_file(&path).ok();
+        fs::remove_file(&path).await.ok();
 
         unistd::mkfifo(&path, stat::Mode::S_IRWXU)
             .wrap_err("Failed to set up process output fifo")?;
