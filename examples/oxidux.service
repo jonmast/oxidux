@@ -1,0 +1,13 @@
+[Unit]
+Description=Oxidux
+After=network.target
+
+[Service]
+# Replace these with your username
+User=YOUR_USERNAME
+Environment=HOME=/home/YOUR_USERNAME
+# Running via ZSH to build up desired environment, you'll likely want to tweak this
+ExecStart=/usr/bin/zsh -lc 'exec oxidux server ~/.oxidux/config.toml'
+
+[Install]
+WantedBy=multi-user.target

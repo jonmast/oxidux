@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+   <dict>
+      <key>EnvironmentVariables</key>
+      <dict>
+         <key>PATH</key>
+         <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+      </dict>
+      <key>Label</key>
+      <string>com.jonmast.oxidux</string>
+      <key>ProgramArguments</key>
+      <array>
+         <string>oxidux</string>
+         <string>server</string>
+      </array>
+      <key>Sockets</key>
+      <dict>
+         <!-- Socket proxy server runs on -->
+         <key>HttpSocket</key>
+         <dict>
+            <key>SockNodeName</key>
+            <string>0.0.0.0</string>
+            <key>SockServiceName</key>
+            <string>80</string>
+         </dict>
+         <!-- Socket for DNS resolver -->
+         <key>DnsUdpSocket</key>
+         <dict>
+            <key>SockNodeName</key>
+            <string>0.0.0.0</string>
+            <key>SockServiceName</key>
+            <!-- This port must match the one in your /etc/resolver/test file -->
+            <string>6153</string>
+            <key>SockType</key>
+            <string>dgram</string>
+         </dict>
+         <!-- DNS Resolver is also accessible over TCP for good measure -->
+         <key>DnsTcpSocket</key>
+         <dict>
+            <key>SockNodeName</key>
+            <string>0.0.0.0</string>
+            <key>SockServiceName</key>
+            <string>6153</string>
+            <key>SockType</key>
+            <string>stream</string>
+         </dict>
+      </dict>
+      <key>StandardOutPath</key>
+      <!-- Insert your username in paths below -->
+      <string>/Users/$USERNAME/Library/Logs/oxidux.log</string>
+      <key>StandardErrorPath</key>
+      <string>/Users/$USERNAME/Library/Logs/oxidux.log</string>
+   </dict>
+</plist>

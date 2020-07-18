@@ -1,0 +1,9 @@
+[Unit]
+Description=Oxidux Server Activation Socket
+
+[Socket]
+# This is the port the Proxy server will run on
+ListenStream=80
+
+[Install]
+WantedBy=multi-user.target

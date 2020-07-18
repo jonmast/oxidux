@@ -26,71 +26,93 @@ someone wants to work on porting it.
 
 You'll also need:
 - Tmux - all apps are run within a tmux session.
-- A server (like Apache) running on port 80 to proxy to oxidux. Support for
-  binding directly to port 80 may be added in the future.
-  Example config for Apache:
-  ```apache
-  <VirtualHost *:80>
-    ServerName oxidux.test
-    ServerAlias *.test
-    ProxyPass "/"  "http://localhost:8080/"
-    ProxyPreserveHost On
-    ProxyTimeout 600
-    ErrorDocument 503 "Oxidux is not running :("
-  </VirtualHost>
-  ```
-- DNS resolution for the `.test` TLD.
-  - For Linux the [dev-tld-resolver](https://github.com/puma/dev-tld-resolver)
-    tool is recommended, add `test` to the `DEV_TLD_DOMAINS` environment
-    variable to enable support for `.test` domains.
-  - For MacOS, support is planned for hooking into the native DNS resolver
-    system, but not implemented at this time. Use one of the following for now:
-    - Add each `app_name.test` to the `/etc/hosts` file
-    - Set up a local DNS server (`dnsmasq` or similar) and configure it to
-      resolve `.test` domains to localhost.
+
+## Setup
+### Linux
+
+#### DNS Resolution
+
+The [dev-tld-resolver](https://github.com/puma/dev-tld-resolver) tool is
+recommended for resolving `*.test` domains to localhost. You'll need to add
+`test` to the `DEV_TLD_DOMAINS` environment variable to enable support for
+`.test` domains.
+
+#### Service management
+
+Oxidux can be run manually from the terminal, but using SystemD socket
+activation is recommended. See example [socket](examples/oxidux.socket) and
+[service](examples/oxidux.service) files.
+
+These files should be added to the `/etc/systemd/system/` directory and
+enabled with the following commands:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable oxidux.socket
+sudo systemctl start oxidux.socket
+```
+
+
+### MacOS
+#### DNS Resolution
+
+Oxidux has a builtin DNS resolver. Add the following config to
+`/etc/resolver/test`:
+```
+nameserver 127.0.0.1
+port 6153
+```
+
+#### Service management
+
+Starting via Launchd is recommended. See example [plist
+file](examples/oxidux.plist).
+
+The plist file should be added to `~/Library/LaunchAgents/` and loaded with the
+following command:
+```bash
+launchctl load ~/Library/LaunchAgents/oxidux.plist
+```
 
 ## Configuration
 ```toml
-# apps.toml
+# config.toml
 
 [general]
-# The proxy server will run on this port. This is intended to be used behind
-# Apache or Nginx to make the app accessible on port 80.
-proxy_port = 8080
+# The proxy server will run on this port. Ignored if socket activation is used.
+proxy_port = 80
+# DNS server port for MacOS. Also ignored with socket activation.
+dns_port = 6153
+# TLD for apps. Defaults to "test".
+domain = "test"
+```
 
-[[apps]]
-# Name is used when proxying requests, this app will be available at app.test
-name = "first-app"
-# Root directory of app
+### App configuration
+
+Each app should have a config file in `~/.oxidux/apps`. Example:
+```toml
+# ~/.oxidux/apps/my-app.toml
+
+# Unique identifer and domain for app (this will be available at "my-app.test")
+name="my-app"
+# App root directory
 directory = "/path/to/app/"
 # Commands to start app processes
 # dynamically generated port is passed in as an environment variable
-commands = { app = "scripts/server -p $PORT" }
-
-# Another app, with different config options
-[[apps]]
-name = "second-app"
-directory = "/path/to/app/"
-# A Procfile can be used instead of specifying the commands
+commands = { web = "scripts/server -p $PORT", worker = "scripts/worker" }
+# Alternatively, load commands from Procfile on app directory
 procfile = true
-# If the app cannot run on a dynamic port it can be set explicitly here
-port = 3000
+# Alternate domains for app
+aliases = ["othername", "yetanother"]
 ```
 
 ## Usage
 
-### Start the server
-```bash
-oxidux server apps.toml
-```
-
-Note that app processes will not be started immediately, they are automatically
-started when a network request comes in for them.
-
 ### Restart a process
 From the app directory, run
 ```bash
-oxidux restart web
+oxidux restart     # Restart all processes for app
+# Or
+oxidux restart web # Restart just the process named "web"
 ```
 
 The terminal will be connected to the Tmux session for that process.
