@@ -5,8 +5,6 @@ use std::{
     path::PathBuf,
 };
 
-use regex::Regex;
-
 type Commands = HashMap<String, String>;
 
 pub fn parse_procfile_in_dir(directory: &str) -> Commands {
@@ -26,6 +24,12 @@ pub fn parse_procfile_in_dir(directory: &str) -> Commands {
     HashMap::new()
 }
 
+fn valid_command(command: &str) -> bool {
+    command
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+}
+
 fn parse_procfile<T>(file: T) -> Commands
 where
     T: Read,
@@ -34,15 +38,17 @@ where
 
     // Valid Procfile lines have an alphanumeric name followed by a colon, then any sequence of
     // characters as the command. Any lines not matching this pattern are ignored.
-    // Regex copied from https://github.com/strongloop/node-foreman/blob/782cf090d4917ff137e9980a36803b93df818b96/lib/procfile.js#L18
-    let pattern = Regex::new(r"^([A-Za-z0-9_-]+):\s*(.+)$").unwrap();
+    // Based on regex from https://github.com/strongloop/node-foreman/blob/782cf090d4917ff137e9980a36803b93df818b96/lib/procfile.js#L18
 
     lines
         .filter_map(|line| {
             line.ok().and_then(|line| {
-                pattern
-                    .captures(&line)
-                    .map(|captures| (captures[1].to_string(), captures[2].to_string()))
+                let parts: Vec<_> = line.splitn(2, ':').collect();
+                if parts.len() == 2 && valid_command(parts[0]) {
+                    Some((parts[0].trim().to_string(), parts[1].trim().to_string()))
+                } else {
+                    None
+                }
             })
         })
         .collect()
@@ -79,11 +85,22 @@ mod tests {
     #[test]
     fn test_comment() {
         // Not really a comment, but invalid lines are ignored
-        let input = b"#Hi there\nweb: server -e test .\n".as_ref();
+        let input = b"# Hi: there\nweb: server -e test .\n".as_ref();
         let result = parse_procfile(input);
 
         let mut expected = HashMap::new();
         expected.insert("web".to_string(), "server -e test .".to_string());
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn colon_in_command() {
+        let input = b"test: command :arg".as_ref();
+        let result = parse_procfile(input);
+
+        let mut expected = HashMap::new();
+        expected.insert("test".to_string(), "command :arg".to_string());
 
         assert_eq!(result, expected);
     }
