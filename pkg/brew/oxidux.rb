@@ -1,14 +1,14 @@
 class Oxidux < Formula
   desc 'Reverse proxy and process manager for web app development.'
   homepage 'https://github.com/jonmast/oxidux'
-  version '0.3.0'
+  version '0.4.0'
 
   if OS.mac?
-      url "https://github.com/jonmast/oxidux/releases/download/v#{version}/oxidux-v#{version}-osx"
-      sha256 '682c602998a960f0cdac1760885dcf1865500f3b3e21fe03485c89a3ad5b6e1c'
+    url "https://github.com/jonmast/oxidux/releases/download/v#{version}/oxidux-v#{version}-osx"
+    sha256 '6f100afedd20172a2237c81148b155e456d50b73ff3594a43a38430d077d0146'
   elsif OS.linux?
-      url "https://github.com/jonmast/oxidux/releases/download/v#{version}/oxidux-v#{version}-linux"
-      sha256 '01b09b66bde13e3d57329fdad94d47387f218ba1525da139ca4d85bc96e0094c'
+    url "https://github.com/jonmast/oxidux/releases/download/v#{version}/oxidux-v#{version}-linux"
+    sha256 '0f1e053e121b8c2435339b293332718c8cfb30e65d1344ace8fa6e00fbe6a5a7'
   end
 
   def install
