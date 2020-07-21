@@ -72,10 +72,10 @@ fn get_activation_socket() -> color_eyre::Result<TcpListener> {
 }
 
 #[cfg(target_os = "macos")]
-mod launchd;
+pub(crate) mod launchd;
 #[cfg(target_os = "macos")]
 fn get_activation_socket() -> color_eyre::Result<TcpListener> {
-    let result = launchd::get_activation_socket("HttpSocket");
+    let result = launchd::get_tcp_socket("HttpSocket");
 
     result.map_err(|e| e.into())
 }
@@ -92,7 +92,7 @@ async fn handle_request(
         match host_resolver::resolve(&host).await {
             Some(app) => app.clone(),
             None => {
-                let process_manager = ProcessManager::global().read().await;
+                let process_manager = ProcessManager::global_read().await;
                 return Ok(host_missing::missing_host_response(host, &process_manager).await);
             }
         }

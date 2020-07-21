@@ -5,7 +5,7 @@ use libc::{c_void, free, size_t};
 use std::{
     ffi::CString,
     io::{Error, ErrorKind::Other},
-    net::TcpListener,
+    net::{TcpListener, UdpSocket},
     os::{
         raw::{c_char, c_int},
         unix::io::{FromRawFd, RawFd},
@@ -20,15 +20,21 @@ extern "C" {
         -> c_int;
 }
 
-pub fn get_activation_socket(name: &str) -> Result<TcpListener, Error> {
+pub(crate) fn get_udp_socket(name: &str) -> Result<UdpSocket, Error> {
+    // Safety: launchd should always return valid fds, and won't return duplicates
+    get_fd(name).map(|fd| unsafe { UdpSocket::from_raw_fd(fd) })
+}
+
+pub(crate) fn get_tcp_socket(name: &str) -> Result<TcpListener, Error> {
+    // Safety: launchd should always return valid fds, and won't return duplicates
+    get_fd(name).map(|fd| unsafe { TcpListener::from_raw_fd(fd) })
+}
+
+fn get_fd(name: &str) -> Result<RawFd, Error> {
     let fds = get_fds(name).unwrap_or_default();
 
     match fds.get(0) {
-        Some(fd) => {
-            let listener = unsafe { TcpListener::from_raw_fd(*fd) };
-
-            Ok(listener)
-        }
+        Some(fd) => Ok(*fd),
         None => Err(Error::new(
             Other,
             "Couln't find file descriptor from socket activation",

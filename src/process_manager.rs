@@ -1,9 +1,11 @@
-use crate::app::App;
-use crate::config::Config;
+use eyre::Context;
 use once_cell::sync::OnceCell;
 use std::time::Duration;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tokio::time::delay_for;
+
+use crate::app::App;
+use crate::config::Config;
 
 #[derive(Debug)]
 pub struct ProcessManager {
@@ -13,6 +15,7 @@ pub struct ProcessManager {
 
 const PORT_START: u16 = 7500;
 const MONITORING_INTERVAL_SECS: u64 = 30;
+const LOCK_TIMEOUT_SECS: u64 = 2;
 static INSTANCE: OnceCell<RwLock<ProcessManager>> = OnceCell::new();
 
 impl ProcessManager {
@@ -51,10 +54,30 @@ impl ProcessManager {
         }
     }
 
-    pub(crate) fn global() -> &'static RwLock<ProcessManager> {
+    fn global() -> &'static RwLock<ProcessManager> {
         INSTANCE
             .get()
             .expect("Attempted to use ProcessManager before it was initalized")
+    }
+
+    pub(crate) async fn global_read() -> RwLockReadGuard<'static, ProcessManager> {
+        let lock_result: color_eyre::Result<_> = tokio::time::timeout(
+            Duration::from_secs(LOCK_TIMEOUT_SECS),
+            Self::global().read(),
+        )
+        .await
+        .context("Possible deadlock - failed to get read lock for ProcessManager");
+        lock_result.unwrap()
+    }
+
+    pub(crate) async fn global_write() -> RwLockWriteGuard<'static, ProcessManager> {
+        let lock_result: color_eyre::Result<_> = tokio::time::timeout(
+            Duration::from_secs(LOCK_TIMEOUT_SECS),
+            Self::global().write(),
+        )
+        .await
+        .context("Possible deadlock - failed to get write lock for ProcessManager");
+        lock_result.unwrap()
     }
 
     pub(crate) fn find_app_by_name(&self, app_name: &str) -> Option<&App> {

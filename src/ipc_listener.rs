@@ -99,7 +99,7 @@ async fn connect_output(
     writer: impl AsyncWrite + Unpin,
 ) {
     let process = {
-        let process_manager = ProcessManager::global().read().await;
+        let process_manager = ProcessManager::global_read().await;
         lookup_process(&process_manager, process_name, directory).await
     };
 
@@ -117,7 +117,7 @@ async fn restart_app(
     writer: impl AsyncWrite + Unpin,
 ) {
     let process = {
-        let process_manager = ProcessManager::global().read().await;
+        let process_manager = ProcessManager::global_read().await;
         lookup_process(&process_manager, process_name, directory).await
     };
 
@@ -134,7 +134,7 @@ async fn restart_app(
 }
 
 async fn stop_app(app_name: &Option<String>, directory: &str, mut writer: impl AsyncWrite + Unpin) {
-    let mut process_manager = ProcessManager::global().write().await;
+    let mut process_manager = ProcessManager::global_write().await;
     let app = {
         match app_name {
             Some(app_name) => process_manager.find_app_by_name(app_name),

@@ -1,5 +1,4 @@
 use std::env;
-use std::fs;
 use std::io::BufRead;
 use std::path::PathBuf;
 use std::str;
@@ -12,9 +11,10 @@ use nix::unistd::{self, Pid};
 
 use eyre::{bail, eyre, Context};
 use tokio::{
-    fs::File,
+    fs::{self, File},
     stream::{Stream, StreamExt},
     sync::{broadcast, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    time::timeout,
 };
 
 use crate::config;
@@ -25,6 +25,8 @@ use crate::tmux;
 pub struct Process {
     inner: Arc<RwLock<Inner>>,
 }
+
+const LOCK_TIMEOUT_SECS: u64 = 2;
 
 #[derive(Debug)]
 struct Inner {
@@ -63,11 +65,25 @@ impl Process {
     }
 
     async fn inner(&self) -> RwLockReadGuard<'_, Inner> {
-        self.inner.read().await
+        let result: color_eyre::Result<_> = timeout(
+            time::Duration::from_secs(LOCK_TIMEOUT_SECS),
+            self.inner.read(),
+        )
+        .await
+        .context("Timed out waiting on process read lock");
+
+        result.unwrap()
     }
 
     async fn inner_mut(&self) -> RwLockWriteGuard<'_, Inner> {
-        self.inner.write().await
+        let result: color_eyre::Result<_> = timeout(
+            time::Duration::from_secs(LOCK_TIMEOUT_SECS),
+            self.inner.write(),
+        )
+        .await
+        .context("Timed out waiting on process write lock");
+
+        result.unwrap()
     }
 
     pub async fn app_name(&self) -> String {
@@ -170,16 +186,22 @@ impl Process {
             .await
             .map_err(|_| "Failed to set up tmux output pipe")?;
 
-        let fifo =
-            fs::File::open(&fifo_path).map_err(|e| format!("Couldn't open FIFO, got {}", e))?;
-        Output::for_stream(File::from_std(fifo), self.clone());
+        let fifo = File::open(&fifo_path)
+            .await
+            .map_err(|e| format!("Couldn't open FIFO, got {}", e))?;
+        Output::for_stream(fifo, self.clone());
 
         Ok(())
     }
 
     async fn setup_fifo(&self) -> color_eyre::Result<PathBuf> {
-        let path = config::config_dir().join(self.app_name().await + ".pipe");
-        fs::remove_file(&path).ok();
+        let pipe_name = {
+            let inner = self.inner().await;
+            format!("{}_{}.pipe", inner.app_name, inner.process_name)
+        };
+
+        let path = config::config_dir().join(pipe_name);
+        fs::remove_file(&path).await.ok();
 
         unistd::mkfifo(&path, stat::Mode::S_IRWXU)
             .wrap_err("Failed to set up process output fifo")?;
@@ -273,7 +295,7 @@ impl Process {
     }
 
     async fn set_pid(&self, pid: u32) {
-        eprintln!("Setting pid for {} to {}", self.app_name().await, pid);
+        eprintln!("Setting pid for {} to {}", self.name().await, pid);
         let pid = Pid::from_raw(pid as i32);
 
         let mut inner = self.inner_mut().await;

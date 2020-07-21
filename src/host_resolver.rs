@@ -5,7 +5,7 @@ use crate::process_manager::ProcessManager;
 ///
 /// Looks in running apps and then falls back to creating the app from config
 pub(crate) async fn resolve(host: &str) -> Option<App> {
-    let process_manager = ProcessManager::global().read().await;
+    let process_manager = ProcessManager::global_read().await;
 
     for app in &process_manager.apps {
         let domains = app.domains();
@@ -29,7 +29,7 @@ pub(crate) async fn resolve(host: &str) -> Option<App> {
     let app_config = app_config?;
 
     // Upgrade to a write lock
-    let mut process_manager = ProcessManager::global().write().await;
+    let mut process_manager = ProcessManager::global_write().await;
     Some(process_manager.add_app(app_config))
 }
 
@@ -54,7 +54,7 @@ mod tests {
             aliases: vec!["appalias".to_string()],
             ..Default::default()
         };
-        ProcessManager::global().write().await.add_app(app_config);
+        ProcessManager::global_write().await.add_app(app_config);
 
         let app = resolve("appname.test").await.unwrap();
         assert_eq!("appname", app.name());
