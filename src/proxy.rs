@@ -2,7 +2,7 @@ use std::future::Future;
 use std::net::{SocketAddr, TcpListener};
 
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{client::HttpConnector, Body, Client, Request, Response, Server, Uri};
+use hyper::{Body, Client, Request, Response, Server, Uri};
 use url::Url;
 
 use crate::host_resolver;
@@ -10,6 +10,7 @@ use crate::host_resolver;
 mod autostart_response;
 mod host_missing;
 mod meta_server;
+mod tls;
 
 use crate::{app::App, config::Config, process_manager::ProcessManager};
 
@@ -32,7 +33,8 @@ async fn error_response(error: &hyper::Error, app: &App) -> Response<Body> {
 }
 
 pub async fn start_server(config: Config, shutdown_handler: impl Future<Output = ()>) {
-    let (addr, server): (_, color_eyre::Result<_>) = if let Ok(listener) = get_activation_socket() {
+    let [http_socket, https_socket] = get_proxy_sockets();
+    let (addr, server): (_, color_eyre::Result<_>) = if let Ok(listener) = http_socket {
         let addr = listener.local_addr().unwrap();
         (addr, Server::from_tcp(listener).map_err(|e| e.into()))
     } else {
@@ -44,14 +46,14 @@ pub async fn start_server(config: Config, shutdown_handler: impl Future<Output =
         )
     };
 
+    if let Ok(listener) = https_socket {
+        tokio::spawn(async move { tls::tls_server(&config.clone(), listener).await.unwrap() });
+    }
+
     eprintln!("Starting proxy server on {}", addr);
 
-    let proxy = make_service_fn(|_| async move {
-        Ok::<_, eyre::Error>(service_fn(move |req| {
-            let client = Client::new();
-            handle_request(req, client)
-        }))
-    });
+    let proxy =
+        make_service_fn(|_| async move { Ok::<_, eyre::Error>(service_fn(handle_request)) });
 
     let server = server
         .unwrap()
@@ -64,27 +66,40 @@ pub async fn start_server(config: Config, shutdown_handler: impl Future<Output =
 }
 
 #[cfg(not(target_os = "macos"))]
-fn get_activation_socket() -> color_eyre::Result<TcpListener> {
+fn get_proxy_sockets() -> [color_eyre::Result<TcpListener>; 2] {
     let mut listenfd = listenfd::ListenFd::from_env();
-    listenfd
-        .take_tcp_listener(0)?
-        .ok_or_else(|| eyre::eyre!("No socket provided"))
+
+    [
+        listenfd
+            .take_tcp_listener(0)
+            .map_err(Into::into)
+            .and_then(|option| option.ok_or_else(|| eyre::eyre!("No socket provided"))),
+        listenfd
+            .take_tcp_listener(1)
+            .map_err(Into::into)
+            .and_then(|option| option.ok_or_else(|| eyre::eyre!("No socket provided"))),
+    ]
 }
 
 #[cfg(target_os = "macos")]
 pub(crate) mod launchd;
 #[cfg(target_os = "macos")]
-fn get_activation_socket() -> color_eyre::Result<TcpListener> {
-    let result = launchd::get_tcp_socket("HttpSocket");
-
-    result.map_err(|e| e.into())
+fn get_proxy_sockets() -> [color_eyre::Result<TcpListener>; 2] {
+    [
+        launchd::get_tcp_socket("HttpSocket").map_err(Into::into),
+        launchd::get_tcp_socket("HttpsSocket").map_err(Into::into),
+    ]
 }
 
-async fn handle_request(
-    mut request: Request<Body>,
-    client: Client<HttpConnector>,
-) -> color_eyre::Result<Response<Body>> {
-    let host = request.headers().get("HOST").unwrap().to_str().unwrap();
+async fn handle_request(mut request: Request<Body>) -> color_eyre::Result<Response<Body>> {
+    let host = request
+        .headers()
+        .get("HOST")
+        .and_then(|v| v.to_str().ok())
+        // HTTP2 requests only set uri, not host header
+        .or_else(|| request.uri().host())
+        .unwrap_or_default();
+
     eprintln!("Serving request for host {:?}", host);
     eprintln!("Full req URI {}", request.uri());
 
@@ -104,12 +119,14 @@ async fn handle_request(
 
     let destination_url = app_url(&app, request.uri());
     *request.uri_mut() = destination_url;
+    *request.version_mut() = hyper::Version::HTTP_11;
 
     app.touch().await;
 
     // Apply header overrides from config
     request.headers_mut().extend(app.headers().clone());
 
+    let client = Client::new();
     let result = client.request(request).await;
 
     match result {
