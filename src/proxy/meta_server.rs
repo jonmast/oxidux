@@ -25,13 +25,9 @@ async fn status_response(app: App) -> color_eyre::Result<Response<Body>> {
 
     for process in app.processes {
         status.push_str(&format!(
-            "{}: {}\n",
+            "{}: {:?}\n",
             process.name().await,
-            process
-                .pid()
-                .await
-                .map(|p| p.to_string())
-                .unwrap_or_else(|| "Stopped".to_string())
+            process.run_state().await
         ));
     }
 
