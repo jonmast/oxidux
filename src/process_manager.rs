@@ -11,6 +11,7 @@ use crate::config::Config;
 pub struct ProcessManager {
     pub apps: Vec<App>,
     config: Config,
+    next_port: u16,
 }
 
 const PORT_START: u16 = 7500;
@@ -27,7 +28,11 @@ impl ProcessManager {
         let apps = Vec::new();
 
         let config = config.clone();
-        ProcessManager { apps, config }
+        ProcessManager {
+            apps,
+            config,
+            next_port: PORT_START,
+        }
     }
 
     /// Start a loop to check for and purge any apps that are idled
@@ -91,13 +96,9 @@ impl ProcessManager {
     }
 
     pub fn add_app(&mut self, new_app: crate::config::App) -> App {
-        let highest_port = self.apps.iter().map(App::port).max().unwrap_or(PORT_START);
+        let app = App::from_config(&new_app, self.next_port, self.config.general.domain.clone());
 
-        let app = App::from_config(
-            &new_app,
-            highest_port + 1,
-            self.config.general.domain.clone(),
-        );
+        self.next_port += 1;
 
         self.apps.push(app.clone());
 
@@ -137,5 +138,30 @@ impl ProcessManager {
 
     pub(crate) fn remove_app_by_name(&mut self, app_name: &str) {
         self.apps.retain(|a| a.name() != app_name);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn port_assignment() {
+        let config = Config::default();
+        let mut manager = ProcessManager::new(&config);
+        let app_config = crate::config::App::default();
+
+        // Set up app and then remove it
+        let app = manager.add_app(app_config.clone());
+        let first_port = app.port();
+        manager.remove_app_by_name(app.name());
+        app.stop().await;
+
+        // Create another app
+        let app2 = manager.add_app(app_config);
+        let second_port = app2.port();
+
+        // Verify that we didn't reuse the port
+        assert_ne!(first_port, second_port);
     }
 }
