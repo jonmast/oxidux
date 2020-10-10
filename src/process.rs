@@ -3,7 +3,7 @@ use std::io::BufRead;
 use std::path::PathBuf;
 use std::str;
 use std::sync::Arc;
-use std::time;
+use std::time::Duration;
 
 use nix::sys::signal::{self, Signal};
 use nix::sys::stat;
@@ -26,7 +26,9 @@ pub struct Process {
     inner: Arc<RwLock<Inner>>,
 }
 
-const LOCK_TIMEOUT_SECS: u64 = 2;
+const LOCK_TIMEOUT: Duration = Duration::from_secs(2);
+const PID_STOP_TIMEOUT: Duration = Duration::from_secs(20);
+const WATCH_INTERVAL: Duration = Duration::from_millis(100);
 
 #[derive(Debug, Clone)]
 pub(crate) enum RunState {
@@ -77,23 +79,17 @@ impl Process {
     }
 
     async fn inner(&self) -> RwLockReadGuard<'_, Inner> {
-        let result: color_eyre::Result<_> = timeout(
-            time::Duration::from_secs(LOCK_TIMEOUT_SECS),
-            self.inner.read(),
-        )
-        .await
-        .context("Timed out waiting on process read lock");
+        let result: color_eyre::Result<_> = timeout(LOCK_TIMEOUT, self.inner.read())
+            .await
+            .context("Timed out waiting on process read lock");
 
         result.unwrap()
     }
 
     async fn inner_mut(&self) -> RwLockWriteGuard<'_, Inner> {
-        let result: color_eyre::Result<_> = timeout(
-            time::Duration::from_secs(LOCK_TIMEOUT_SECS),
-            self.inner.write(),
-        )
-        .await
-        .context("Timed out waiting on process write lock");
+        let result: color_eyre::Result<_> = timeout(LOCK_TIMEOUT, self.inner.write())
+            .await
+            .context("Timed out waiting on process write lock");
 
         result.unwrap()
     }
@@ -235,9 +231,28 @@ impl Process {
             RunState::Stopped => self.start().await.unwrap_or_else(|e| eprintln!("{}", e)),
             RunState::Running(pid) | RunState::Terminating(pid) => {
                 self.set_run_state(RunState::Restarting(pid)).await;
+                self.kill_after_timout(pid);
+
                 signal_pid(pid, Signal::SIGINT).unwrap_or_else(|e| eprintln!("{}", e));
             }
         }
+    }
+
+    /// Force kill the process if it doesn't respond to our earlier SIGINT
+    fn kill_after_timout(&self, pid: Pid) {
+        let process = self.clone();
+        tokio::spawn(async move {
+            tokio::time::delay_for(PID_STOP_TIMEOUT).await;
+
+            match process.run_state().await {
+                RunState::Restarting(newpid) | RunState::Terminating(newpid) if pid == newpid => {
+                    signal_pid(pid, Signal::SIGKILL).unwrap_or_else(|e| eprintln!("{}", e));
+                }
+                _ => {
+                    // If process is in new state or pid has changed don't try to kill
+                }
+            };
+        });
     }
 
     pub async fn process_died(&self) {
@@ -326,8 +341,7 @@ impl Process {
         let process = self.clone();
 
         let watcher = async move {
-            let mut interval =
-                tokio::time::interval(time::Duration::from_millis(WATCH_INTERVAL_MS));
+            let mut interval = tokio::time::interval(WATCH_INTERVAL);
 
             loop {
                 interval.tick().await;
@@ -380,8 +394,6 @@ impl Process {
         });
     }
 }
-
-const WATCH_INTERVAL_MS: u64 = 100;
 
 fn signal_pid(pid: Pid, signal: Signal) -> Result<(), &'static str> {
     let group_pid = unistd::getpgid(Some(pid)).map_err(|_| "Couldn't find group for PID")?;
