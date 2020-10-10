@@ -90,7 +90,7 @@ async fn handle_request(
 
     let app = {
         match host_resolver::resolve(&host).await {
-            Some(app) => app.clone(),
+            Some(app) => app,
             None => {
                 let process_manager = ProcessManager::global_read().await;
                 return Ok(host_missing::missing_host_response(host, &process_manager).await);
@@ -127,14 +127,14 @@ fn build_address(config: &Config) -> SocketAddr {
     format!("127.0.0.1:{}", port).parse().unwrap()
 }
 
-fn app_url(process: &App, request_url: &Uri) -> Uri {
+fn app_url(app: &App, request_url: &Uri) -> Uri {
     let base_url = Url::parse("http://localhost/").unwrap();
 
     let mut destination_url = base_url
         .join(request_url.path_and_query().unwrap().as_str())
         .expect("Invalid request URL");
 
-    destination_url.set_port(Some(process.port())).unwrap();
+    destination_url.set_port(Some(app.port())).unwrap();
 
     eprintln!("Starting request to backend {}", destination_url);
 

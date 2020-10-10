@@ -3,7 +3,7 @@ use std::io::BufRead;
 use std::path::PathBuf;
 use std::str;
 use std::sync::Arc;
-use std::time;
+use std::time::Duration;
 
 use nix::sys::signal::{self, Signal};
 use nix::sys::stat;
@@ -26,7 +26,23 @@ pub struct Process {
     inner: Arc<RwLock<Inner>>,
 }
 
-const LOCK_TIMEOUT_SECS: u64 = 2;
+const LOCK_TIMEOUT: Duration = Duration::from_secs(2);
+const PID_STOP_TIMEOUT: Duration = Duration::from_secs(20);
+const WATCH_INTERVAL: Duration = Duration::from_millis(100);
+
+#[derive(Debug, Clone)]
+pub(crate) enum RunState {
+    /// Process is not running - initial state
+    Stopped,
+    /// Start request received, but PID not yet set
+    Starting,
+    /// Process is running with a known PID
+    Running(Pid),
+    /// Killing process, but haven't yet confirmed
+    Terminating(Pid),
+    /// Same as `Terminating`, but with the intention to restart
+    Restarting(Pid),
+}
 
 #[derive(Debug)]
 struct Inner {
@@ -35,8 +51,7 @@ struct Inner {
     port: u16,
     command: String,
     directory: String,
-    pid: Option<Pid>,
-    restart_pending: bool,
+    state: RunState,
     output_channel: broadcast::Sender<(Process, String)>,
 }
 
@@ -54,8 +69,7 @@ impl Process {
             port,
             command,
             directory: expand_path(&app_config.directory),
-            pid: None,
-            restart_pending: false,
+            state: RunState::Stopped,
             output_channel,
         };
 
@@ -65,23 +79,17 @@ impl Process {
     }
 
     async fn inner(&self) -> RwLockReadGuard<'_, Inner> {
-        let result: color_eyre::Result<_> = timeout(
-            time::Duration::from_secs(LOCK_TIMEOUT_SECS),
-            self.inner.read(),
-        )
-        .await
-        .context("Timed out waiting on process read lock");
+        let result: color_eyre::Result<_> = timeout(LOCK_TIMEOUT, self.inner.read())
+            .await
+            .context("Timed out waiting on process read lock");
 
         result.unwrap()
     }
 
     async fn inner_mut(&self) -> RwLockWriteGuard<'_, Inner> {
-        let result: color_eyre::Result<_> = timeout(
-            time::Duration::from_secs(LOCK_TIMEOUT_SECS),
-            self.inner.write(),
-        )
-        .await
-        .context("Timed out waiting on process write lock");
+        let result: color_eyre::Result<_> = timeout(LOCK_TIMEOUT, self.inner.write())
+            .await
+            .context("Timed out waiting on process write lock");
 
         result.unwrap()
     }
@@ -140,14 +148,18 @@ impl Process {
     }
 
     pub async fn start(&self) -> Result<(), String> {
-        self.set_restart_pending(false).await;
+        if !matches!(self.run_state().await, RunState::Stopped) {
+            return Err("Ignoring start request - process is not stopped".to_string());
+        }
+
+        self.set_run_state(RunState::Starting).await;
 
         if self.respawn_tmux_session().await.is_ok() {
-            println!("Respawned existing session");
+            eprintln!("Respawned existing session");
             // Bail out if respawning worked
             return Ok(());
         }
-        println!("Starting new session");
+        eprintln!("Starting new session");
 
         // Clean up any existing tmux sessions with conflicting names
         self.kill_tmux_session().await?;
@@ -211,54 +223,73 @@ impl Process {
 
     pub async fn restart(&self) {
         eprintln!("restarting");
-        self.stop().await;
 
-        self.set_restart_pending(true).await;
+        match self.run_state().await {
+            RunState::Restarting(_) | RunState::Starting => {
+                eprintln!("Ignoring restart request, process is in invalid state");
+            }
+            RunState::Stopped => self.start().await.unwrap_or_else(|e| eprintln!("{}", e)),
+            RunState::Running(pid) | RunState::Terminating(pid) => {
+                self.set_run_state(RunState::Restarting(pid)).await;
+                self.kill_after_timout(pid);
 
-        if !self.is_running().await {
-            self.start().await.unwrap_or_else(|e| eprintln!("{}", e));
+                signal_pid(pid, Signal::SIGINT).unwrap_or_else(|e| eprintln!("{}", e));
+            }
         }
     }
 
-    pub async fn process_died(&self) {
-        self.set_stopped().await;
+    /// Force kill the process if it doesn't respond to our earlier SIGINT
+    fn kill_after_timout(&self, pid: Pid) {
+        let process = self.clone();
+        tokio::spawn(async move {
+            tokio::time::delay_for(PID_STOP_TIMEOUT).await;
 
-        if self.restart_pending().await {
+            match process.run_state().await {
+                RunState::Restarting(newpid) | RunState::Terminating(newpid) if pid == newpid => {
+                    signal_pid(pid, Signal::SIGKILL).unwrap_or_else(|e| eprintln!("{}", e));
+                }
+                _ => {
+                    // If process is in new state or pid has changed don't try to kill
+                }
+            };
+        });
+    }
+
+    pub async fn process_died(&self) {
+        let previous_state = self.run_state().await;
+        self.set_run_state(RunState::Stopped).await;
+
+        if let RunState::Restarting(_) = previous_state {
             self.start().await.unwrap_or_else(|e| eprintln!("{}", e));
         }
     }
 
     pub async fn stop(&self) {
-        eprintln!("Stopping process {}", self.name().await);
-
-        match self.send_signal(Signal::SIGINT).await {
-            Ok(_) => {
-                eprintln!("Successfully sent stop signal");
+        match self.run_state().await {
+            RunState::Starting | RunState::Stopped => {
+                eprintln!("Ignoring stop request, process is in invalid state");
             }
-            Err(msg) => eprintln!("Couldn't SIGINT, got err {}", msg),
+            RunState::Running(pid) | RunState::Terminating(pid) | RunState::Restarting(pid) => {
+                self.set_run_state(RunState::Terminating(pid)).await;
+                signal_pid(pid, Signal::SIGINT).unwrap_or_else(|e| eprintln!("{}", e));
+            }
         }
     }
 
     pub async fn is_running(&self) -> bool {
-        self.pid().await.is_some()
+        if let RunState::Running(_) = self.run_state().await {
+            true
+        } else {
+            false
+        }
     }
 
-    async fn restart_pending(&self) -> bool {
-        self.inner().await.restart_pending
+    pub(crate) async fn run_state(&self) -> RunState {
+        self.inner().await.state.clone()
     }
 
-    async fn set_restart_pending(&self, state: bool) {
-        let mut inner = self.inner_mut().await;
-        inner.restart_pending = state
-    }
-
-    async fn send_signal(&self, signal: Signal) -> Result<(), &str> {
-        let pid = self.pid().await.ok_or("Pid is empty")?;
-
-        let group_pid = unistd::getpgid(Some(pid)).map_err(|_| "Couldn't find group for PID")?;
-
-        eprintln!("Sending {:?} to process group {}", signal, group_pid);
-        signal::kill(negate_pid(group_pid), signal).map_err(|_| "Failed to signal pid")
+    async fn set_run_state(&self, new_state: RunState) {
+        self.inner_mut().await.state = new_state;
     }
 
     async fn shell_args(&self) -> [String; 5] {
@@ -290,29 +321,27 @@ impl Process {
         self.inner().await.command.clone()
     }
 
-    pub async fn pid(&self) -> Option<Pid> {
-        self.inner().await.pid
+    async fn pid(&self) -> Option<Pid> {
+        match self.run_state().await {
+            RunState::Running(pid) | RunState::Restarting(pid) | RunState::Terminating(pid) => {
+                Some(pid)
+            }
+            _ => None,
+        }
     }
 
     async fn set_pid(&self, pid: u32) {
         eprintln!("Setting pid for {} to {}", self.name().await, pid);
         let pid = Pid::from_raw(pid as i32);
 
-        let mut inner = self.inner_mut().await;
-        inner.pid = Some(pid);
-    }
-
-    async fn set_stopped(&self) {
-        let mut inner = self.inner_mut().await;
-        inner.pid = None;
+        self.set_run_state(RunState::Running(pid)).await
     }
 
     fn watch_for_exit(&self) {
         let process = self.clone();
 
         let watcher = async move {
-            let mut interval =
-                tokio::time::interval(time::Duration::from_millis(WATCH_INTERVAL_MS));
+            let mut interval = tokio::time::interval(WATCH_INTERVAL);
 
             loop {
                 interval.tick().await;
@@ -366,7 +395,12 @@ impl Process {
     }
 }
 
-const WATCH_INTERVAL_MS: u64 = 100;
+fn signal_pid(pid: Pid, signal: Signal) -> Result<(), &'static str> {
+    let group_pid = unistd::getpgid(Some(pid)).map_err(|_| "Couldn't find group for PID")?;
+
+    eprintln!("Sending {:?} to process group {}", signal, group_pid);
+    signal::kill(negate_pid(group_pid), signal).map_err(|_| "Failed to signal pid")
+}
 
 fn negate_pid(pid: Pid) -> Pid {
     let pid_id: i32 = pid.into();
