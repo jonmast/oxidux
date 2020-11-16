@@ -36,7 +36,7 @@ path = "tests/helpers/echo_server.rs"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 trust-dns-server = "0.19.3"
-trust-dns-client = "0.19.3"
+trust-dns-client = "0.19.6"
 
 [dev-dependencies]
 rand = "0.7.0"
