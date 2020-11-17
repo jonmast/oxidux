@@ -13,7 +13,7 @@ sign-tag = true
 
 [dependencies]
 futures = "0.3.7"
-tokio = { version = "0.2.22", features = ["tcp", "signal", "fs", "time", "uds", "io-util", "sync", "macros", "process"] }
+tokio = { version = "0.2.23", features = ["tcp", "signal", "fs", "time", "uds", "io-util", "sync", "macros", "process"] }
 hyper = "0.13.8"
 url = "2.0.0"
 toml = "0.5"
