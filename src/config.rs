@@ -5,7 +5,6 @@ use std::io::prelude::*;
 use std::path::PathBuf;
 use tokio::fs::{read_dir as async_read_dir, File as AsyncFile};
 use tokio::io::AsyncReadExt;
-use tokio::stream::StreamExt;
 
 use hyper::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::{
@@ -27,7 +26,7 @@ impl Config {
         let mut results = Vec::new();
         match async_read_dir(app_config_dir).await {
             Ok(mut entries) => {
-                while let Some(entry) = entries.next().await {
+                while let Some(entry) = entries.next_entry().await.transpose() {
                     match read_app_config(entry).await {
                         Ok(app) => results.push(app),
                         Err(e) => {

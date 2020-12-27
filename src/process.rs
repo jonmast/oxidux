@@ -9,11 +9,15 @@ use nix::sys::signal::{self, Signal};
 use nix::sys::stat;
 use nix::unistd::{self, Pid};
 
+use async_stream::stream;
 use eyre::{bail, eyre, Context};
+use futures::Stream;
 use tokio::{
     fs::{self, File},
-    stream::{Stream, StreamExt},
-    sync::{broadcast, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::{
+        broadcast::{self, error::RecvError},
+        RwLock, RwLockReadGuard, RwLockWriteGuard,
+    },
     time::timeout,
 };
 
@@ -242,7 +246,7 @@ impl Process {
     fn kill_after_timout(&self, pid: Pid) {
         let process = self.clone();
         tokio::spawn(async move {
-            tokio::time::delay_for(PID_STOP_TIMEOUT).await;
+            tokio::time::sleep(PID_STOP_TIMEOUT).await;
 
             match process.run_state().await {
                 RunState::Restarting(newpid) | RunState::Terminating(newpid) if pid == newpid => {
@@ -371,17 +375,21 @@ impl Process {
     }
 
     pub async fn register_output_watcher(&self) -> impl Stream<Item = (Process, String)> {
-        self.inner()
-            .await
-            .output_channel
-            .subscribe()
-            .filter_map(|result| match result {
-                Ok(val) => Some(val),
+        let mut channel = self.inner().await.output_channel.subscribe();
+
+        let raw_stream = stream! {
+            loop {
+                match channel.recv().await {
+                Ok(val) => yield val,
+                Err(RecvError::Closed) => break,
                 Err(e) => {
                     eprintln!("Got error {} in output listener", e);
-                    None
                 }
-            })
+                }
+            }
+        };
+
+        Box::pin(raw_stream)
     }
 
     /// Forwards stdout from process to any registered watchers

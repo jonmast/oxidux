@@ -3,12 +3,10 @@ use crate::ipc_command::IPCCommand;
 
 use color_eyre::Result;
 use eyre::{eyre, Context};
-use futures::StreamExt;
 use std::str;
 use tokio::fs;
-use tokio::io::BufReader;
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
-use tokio::prelude::*;
 
 use crate::ipc_response::IPCResponse;
 use crate::process::Process;
@@ -70,12 +68,11 @@ pub fn start_ipc_sock() {
     let listener = async move {
         let path = config::socket_path();
         fs::remove_file(&path).await.ok();
-        let mut sock = UnixListener::bind(&path).expect("Failed to create IPC socket");
-        let mut incoming = sock.incoming();
+        let sock = UnixListener::bind(&path).expect("Failed to create IPC socket");
 
-        while let Some(connection) = incoming.next().await {
-            match connection {
-                Ok(connection) => read_command(connection),
+        loop {
+            match sock.accept().await {
+                Ok((connection, _addr)) => read_command(connection),
                 Err(err) => eprintln!("Failed to read from IPC socket, got error {:?}", err),
             };
         }

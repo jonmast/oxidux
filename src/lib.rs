@@ -37,7 +37,7 @@ pub fn run_server(config: Config) {
         return eprint!("Error: server is already running");
     }
 
-    let mut runtime = Runtime::new().unwrap();
+    let runtime = Runtime::new().unwrap();
 
     #[cfg(target_os = "macos")]
     runtime.enter(|| {

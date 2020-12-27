@@ -1,7 +1,6 @@
 use crate::process::Process;
 use ansi_term::Color;
-use tokio::io::{BufReader, Lines};
-use tokio::prelude::*;
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, BufReader, Lines};
 
 type OutputStream<T> = Lines<T>;
 pub struct Output {

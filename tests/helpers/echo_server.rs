@@ -1,4 +1,3 @@
-use hyper::body::Buf;
 /// Helper binary for testing
 ///
 /// This boots up a basic http server that echos back the request body and headers, which is useful
@@ -42,14 +41,8 @@ impl EchoResponse {
             .iter()
             .map(|(name, value)| (name.as_str().into(), value.to_str().unwrap().into()))
             .collect();
-        let body = String::from_utf8(
-            hyper::body::aggregate(request)
-                .await
-                .unwrap()
-                .to_bytes()
-                .to_vec(),
-        )
-        .unwrap();
+        let body =
+            String::from_utf8(hyper::body::to_bytes(request).await.unwrap().to_vec()).unwrap();
 
         Self { url, headers, body }
     }
