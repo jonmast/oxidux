@@ -21,6 +21,7 @@ mod ipc_listener;
 mod ipc_response;
 mod output;
 mod procfile;
+pub mod setup;
 mod signals;
 mod tmux;
 
