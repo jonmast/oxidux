@@ -1,17 +1,17 @@
-use eyre::Context;
 use std::collections::HashMap;
 use std::fs::{create_dir, File};
 use std::io::prelude::*;
 use std::path::PathBuf;
-use tokio::fs::{read_dir as async_read_dir, File as AsyncFile};
-use tokio::io::AsyncReadExt;
-use tokio::stream::StreamExt;
 
+use eyre::Context;
 use hyper::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::{
     de::{self, Unexpected},
     Deserialize, Deserializer,
 };
+use tokio::fs::{read_dir as async_read_dir, File as AsyncFile};
+use tokio::io::AsyncReadExt;
+use tokio::stream::StreamExt;
 
 use crate::procfile;
 
@@ -60,11 +60,15 @@ async fn read_app_config(entry: tokio::io::Result<tokio::fs::DirEntry>) -> color
     Ok(app)
 }
 
+fn default_proxy_port() -> u16 {
+    0
+}
+
 fn default_dns_port() -> u16 {
     6153
 }
 
-fn default_domain() -> String {
+pub(crate) fn default_domain() -> String {
     "test".to_string()
 }
 
@@ -74,6 +78,7 @@ fn default_idle_timeout_secs() -> u64 {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct ProxyConfig {
+    #[serde(default = "default_proxy_port")]
     pub proxy_port: u16,
     #[serde(default = "default_dns_port")]
     pub dns_port: u16,

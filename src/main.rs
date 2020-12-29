@@ -10,8 +10,7 @@ fn main() -> color_eyre::Result<()> {
                 .arg(
                     Arg::with_name("config")
                         .value_name("CONFIG_FILE")
-                        .help("App config file")
-                        .default_value("apps.toml"),
+                        .help("App config file"),
                 ),
         )
         .subcommand(
@@ -39,6 +38,7 @@ fn main() -> color_eyre::Result<()> {
                     .help("Name of app to stop (defaults to app for current directory)"),
             ),
         )
+        .subcommand(SubCommand::with_name("setup").about("Configure Oxidux"))
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .get_matches();
 
@@ -59,6 +59,9 @@ fn main() -> color_eyre::Result<()> {
         ("stop", Some(matches)) => {
             let app_name = matches.value_of("app_name");
             oxidux::client::stop_app(app_name)?;
+        }
+        ("setup", Some(_matches)) => {
+            oxidux::setup::setup();
         }
         (command, _) => panic!("Unrecognized command {}", command),
     }
