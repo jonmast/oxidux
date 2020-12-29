@@ -6,8 +6,7 @@ use std::process::Command;
 
 use eyre::{bail, eyre, WrapErr};
 
-use super::SetupArgs;
-use super::SetupResult;
+use super::{SetupArgs, SetupResult};
 
 pub(super) fn setup(args: &SetupArgs) -> SetupResult {
     verify_tld_resolver(args)?;

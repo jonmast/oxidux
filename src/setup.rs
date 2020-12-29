@@ -12,6 +12,11 @@ mod linux;
 #[cfg(target_os = "linux")]
 use linux as imp;
 
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "macos")]
+use macos as imp;
+
 pub fn setup() {
     println!("Welcome to Oxidux!");
     if let Err(e) = try_setup() {
