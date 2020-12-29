@@ -28,7 +28,7 @@ jobs:
         rust:
           - stable
           - beta
-          - 1.42.0 # minimum required by color-eyre
+          - 1.46.0
         os:
           - ubuntu-latest
           - macOS-latest
