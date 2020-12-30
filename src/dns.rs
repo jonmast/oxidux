@@ -3,11 +3,10 @@ use std::{
     net::{SocketAddr, TcpListener, UdpSocket},
     pin::Pin,
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, RwLock},
     time::Duration,
 };
-use tokio::runtime::Runtime;
-use trust_dns_client::{
+use trust_dns_server::client::{
     op::{LowerQuery, ResponseCode},
     rr::{
         dnssec::{DnsSecResult, Signer, SupportedAlgorithms},
@@ -32,7 +31,7 @@ const TCP_TIMEOUT: u64 = 5;
 ///
 /// This is intended for use only with the MacOS resolver system, it can't be used as a regular DNS
 /// server to do real lookups.
-pub fn start_dns_server(port: u16, domain: &str, runtime: &Runtime) -> color_eyre::Result<()> {
+pub fn start_dns_server(port: u16, domain: &str) -> color_eyre::Result<()> {
     let dns_address = format!("127.0.0.1:{}", port);
     let mut catalog = Catalog::new();
 
@@ -40,7 +39,7 @@ pub fn start_dns_server(port: u16, domain: &str, runtime: &Runtime) -> color_eyr
     let authority = LocalhostAuthority {
         name: name.clone().into(),
     };
-    catalog.upsert(name.into(), Box::new(authority));
+    catalog.upsert(name.into(), Box::new(Arc::new(RwLock::new(authority))));
 
     let mut server = ServerFuture::new(catalog);
     let address: SocketAddr = dns_address.parse().unwrap();
@@ -56,8 +55,8 @@ pub fn start_dns_server(port: u16, domain: &str, runtime: &Runtime) -> color_eyr
         tcp_listener.local_addr().unwrap()
     );
 
-    server.register_socket_std(udp_socket, runtime);
-    server.register_listener_std(tcp_listener, Duration::from_secs(TCP_TIMEOUT), runtime)?;
+    server.register_socket_std(udp_socket)?;
+    server.register_listener_std(tcp_listener, Duration::from_secs(TCP_TIMEOUT))?;
 
     Ok(())
 }
