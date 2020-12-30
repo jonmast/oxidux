@@ -37,18 +37,16 @@ pub fn run_server(config: Config) {
         return eprint!("Error: server is already running");
     }
 
-    let mut runtime = Runtime::new().unwrap();
-
-    #[cfg(target_os = "macos")]
-    runtime.enter(|| {
-        dns::start_dns_server(config.general.dns_port, &config.general.domain, &runtime)
-            .expect("Failed to start DNS server");
-    });
+    let runtime = Runtime::new().unwrap();
 
     runtime.block_on(async {
         ProcessManager::initialize(&config);
 
         tokio::spawn(ProcessManager::monitor_idle_timeout());
+
+        #[cfg(target_os = "macos")]
+        dns::start_dns_server(config.general.dns_port, &config.general.domain)
+            .expect("Failed to start DNS server");
 
         let shutdown_rx = signals::ctrlc_listener();
 

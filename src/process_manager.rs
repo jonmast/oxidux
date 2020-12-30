@@ -2,7 +2,7 @@ use eyre::Context;
 use once_cell::sync::OnceCell;
 use std::time::Duration;
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 use crate::app::App;
 use crate::config::Config;
@@ -38,7 +38,7 @@ impl ProcessManager {
     /// Start a loop to check for and purge any apps that are idled
     pub(crate) async fn monitor_idle_timeout() {
         loop {
-            delay_for(Duration::from_secs(MONITORING_INTERVAL_SECS)).await;
+            sleep(Duration::from_secs(MONITORING_INTERVAL_SECS)).await;
             let process_manager = Self::global().read().await;
             let idle_timout_secs = process_manager.config().general.idle_timeout_secs;
             let mut expired_apps = Vec::new();
@@ -121,7 +121,7 @@ impl ProcessManager {
 
         // Poll processes until they stop
         'outer: loop {
-            delay_for(Duration::from_millis(200)).await;
+            sleep(Duration::from_millis(200)).await;
 
             for app in &self.apps {
                 if app.is_running().await {

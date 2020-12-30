@@ -1,5 +1,4 @@
 use futures::future::FutureExt;
-use hyper::body::Buf;
 use hyper::{Body, Client, Request};
 use oxidux::config::{Config, ProxyConfig};
 use oxidux::process_manager::ProcessManager;
@@ -85,9 +84,8 @@ command = 'sleep 10; {}'
         .unwrap();
     assert_eq!(response.status(), 200);
 
-    let mut buffer = hyper::body::aggregate(response.into_body()).await.unwrap();
-    let data: serde_json::Value =
-        serde_json::from_str(std::str::from_utf8(&buffer.to_bytes()).unwrap()).unwrap();
+    let buffer = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let data: serde_json::Value = serde_json::from_slice(&buffer).unwrap();
 
     assert_eq!(data["url"], "/proxy-test");
     assert_eq!(data["headers"]["host"], app_host);
