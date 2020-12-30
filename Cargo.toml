@@ -35,7 +35,7 @@ name = "echo-server"
 path = "tests/helpers/echo_server.rs"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-trust-dns-server = "0.19.6"
+trust-dns-server = "0.20.0"
 trust-dns-client = "0.19.3"
 
 [dev-dependencies]
