@@ -281,11 +281,7 @@ impl Process {
     }
 
     pub async fn is_running(&self) -> bool {
-        if let RunState::Running(_) = self.run_state().await {
-            true
-        } else {
-            false
-        }
+        matches!(self.run_state().await, RunState::Running(_))
     }
 
     pub(crate) async fn run_state(&self) -> RunState {
