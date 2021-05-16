@@ -6,31 +6,31 @@ use std::process::Command;
 use std::time::Duration;
 
 use crate::config;
-use crate::ipc_command::IPCCommand;
-use crate::ipc_response::IPCResponse;
+use crate::ipc_command::IpcCommand;
+use crate::ipc_response::IpcResponse;
 
 type ClientResult<T> = color_eyre::Result<T>;
 type EmptyResult = ClientResult<()>;
 
 pub fn restart_process(process_name: Option<&str>) -> EmptyResult {
-    let command = IPCCommand::restart_command(process_name.map(str::to_string), current_dir()?);
+    let command = IpcCommand::restart_command(process_name.map(str::to_string), current_dir()?);
     send_command(&command)?;
     Ok(())
 }
 
 pub fn connect_to_process(process_name: Option<&str>) -> EmptyResult {
-    let command = IPCCommand::connect_command(process_name.map(str::to_string), current_dir()?);
+    let command = IpcCommand::connect_command(process_name.map(str::to_string), current_dir()?);
     send_command(&command)?;
     Ok(())
 }
 
 pub fn stop_app(app_name: Option<&str>) -> EmptyResult {
-    let command = IPCCommand::stop_command(app_name.map(str::to_string), current_dir()?);
+    let command = IpcCommand::stop_command(app_name.map(str::to_string), current_dir()?);
     send_command(&command)?;
     Ok(())
 }
 
-fn send_command(command: &IPCCommand) -> EmptyResult {
+fn send_command(command: &IpcCommand) -> EmptyResult {
     let mut socket = UnixStream::connect(config::socket_path())
         .context("Failed to open socket. Is the server running?")?;
 
@@ -42,11 +42,11 @@ fn send_command(command: &IPCCommand) -> EmptyResult {
     serde_json::to_writer(&socket, &command)?;
     socket.write_all(b"\n")?;
     socket.flush()?;
-    let response: IPCResponse =
+    let response: IpcResponse =
         serde_json::from_reader(socket).context("Failed to parse response from server")?;
 
     match response {
-        IPCResponse::ConnectionDetails {
+        IpcResponse::ConnectionDetails {
             tmux_socket,
             tmux_session,
             ..
@@ -62,8 +62,8 @@ fn send_command(command: &IPCCommand) -> EmptyResult {
                 bail!("Tmux reported Error");
             }
         }
-        IPCResponse::Status(message) => println!("{}", message),
-        IPCResponse::NotFound(message) => eprintln!("Server returned error: {}", message),
+        IpcResponse::Status(message) => println!("{}", message),
+        IpcResponse::NotFound(message) => eprintln!("Server returned error: {}", message),
     }
 
     Ok(())

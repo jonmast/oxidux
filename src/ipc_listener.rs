@@ -1,5 +1,5 @@
 use crate::config;
-use crate::ipc_command::IPCCommand;
+use crate::ipc_command::IpcCommand;
 
 use color_eyre::Result;
 use eyre::{eyre, Context};
@@ -8,7 +8,7 @@ use tokio::fs;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 
-use crate::ipc_response::IPCResponse;
+use crate::ipc_response::IpcResponse;
 use crate::process::Process;
 use crate::process_manager::ProcessManager;
 
@@ -26,7 +26,7 @@ fn read_command(mut connection: UnixStream) {
     });
 }
 
-async fn parse_command(reader: &mut (impl AsyncBufRead + Unpin)) -> color_eyre::Result<IPCCommand> {
+async fn parse_command(reader: &mut (impl AsyncBufRead + Unpin)) -> color_eyre::Result<IpcCommand> {
     let mut msg = vec![];
     reader
         .read_until(b'\n', &mut msg)
@@ -35,31 +35,31 @@ async fn parse_command(reader: &mut (impl AsyncBufRead + Unpin)) -> color_eyre::
     parse_incoming_command(&msg).context("Failed to parse command, is it valid JSON?")
 }
 
-async fn run_command<T>(command: &IPCCommand, writer: T)
+async fn run_command<T>(command: &IpcCommand, writer: T)
 where
     T: AsyncWrite + Unpin,
 {
     match command {
-        IPCCommand::Restart {
+        IpcCommand::Restart {
             process_name,
             directory,
         } => restart_app(process_name, directory, writer).await,
-        IPCCommand::Connect {
+        IpcCommand::Connect {
             process_name,
             directory,
         } => connect_output(process_name, directory, writer).await,
-        IPCCommand::Stop {
+        IpcCommand::Stop {
             app_name,
             directory,
         } => stop_app(app_name, directory, writer).await,
-        IPCCommand::Ping => heartbeat_response(writer).await,
+        IpcCommand::Ping => heartbeat_response(writer).await,
     }
 }
 
-fn parse_incoming_command(buf: &[u8]) -> Result<IPCCommand> {
+fn parse_incoming_command(buf: &[u8]) -> Result<IpcCommand> {
     let raw_json = str::from_utf8(&buf)?;
 
-    let command: IPCCommand = serde_json::from_str(raw_json)?;
+    let command: IpcCommand = serde_json::from_str(raw_json)?;
 
     Ok(command)
 }
@@ -85,7 +85,7 @@ async fn process_response<T>(process: &Result<Process>, mut writer: T) -> color_
 where
     T: AsyncWrite + Unpin,
 {
-    let response = IPCResponse::for_process(process).await;
+    let response = IpcResponse::for_process(process).await;
 
     write_response(&mut writer, &response).await
 }
@@ -149,14 +149,14 @@ async fn stop_app(app_name: &Option<String>, directory: &str, mut writer: impl A
         None => "Failed to find app to stop".to_string(),
     };
 
-    if let Err(e) = write_response(&mut writer, &IPCResponse::Status(response)).await {
+    if let Err(e) = write_response(&mut writer, &IpcResponse::Status(response)).await {
         eprintln!("{:#}", e);
     }
 }
 
 async fn write_response(
     writer: &mut (impl AsyncWrite + Unpin),
-    response: &IPCResponse,
+    response: &IpcResponse,
 ) -> color_eyre::Result<()> {
     let json = serde_json::to_string(response)?;
 

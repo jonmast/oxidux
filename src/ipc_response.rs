@@ -4,7 +4,7 @@ use crate::process::Process;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum IPCResponse {
+pub enum IpcResponse {
     NotFound(String),
     ConnectionDetails {
         app_name: String,
@@ -14,16 +14,19 @@ pub enum IPCResponse {
     Status(String),
 }
 
-impl IPCResponse {
+impl IpcResponse {
     pub async fn for_process(process: &color_eyre::Result<Process>) -> Self {
         match process {
-            Ok(process) => IPCResponse::ConnectionDetails {
-                app_name: process.app_name().await,
-                tmux_socket: config::tmux_socket(),
-                tmux_session: process.tmux_session().await,
-            },
+            Ok(process) => {
+                let app_name = process.app_name().await;
+                IpcResponse::ConnectionDetails {
+                    app_name,
+                    tmux_socket: config::tmux_socket(),
+                    tmux_session: process.tmux_session().await,
+                }
+            }
 
-            Err(error) => IPCResponse::NotFound(error.to_string()),
+            Err(error) => IpcResponse::NotFound(error.to_string()),
         }
     }
 }

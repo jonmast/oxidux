@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::config;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub(crate) enum IPCCommand {
+pub(crate) enum IpcCommand {
     Restart {
         process_name: Option<String>,
         directory: String,
@@ -21,7 +21,7 @@ pub(crate) enum IPCCommand {
     Ping,
 }
 
-impl IPCCommand {
+impl IpcCommand {
     pub fn restart_command(process_name: Option<String>, directory: String) -> Self {
         Self::Restart {
             process_name,
@@ -56,7 +56,7 @@ pub fn ping_server() -> color_eyre::Result<String> {
     socket.set_read_timeout(timeout)?;
     socket.set_write_timeout(timeout)?;
 
-    let command = IPCCommand::heartbeat_command();
+    let command = IpcCommand::heartbeat_command();
     serde_json::to_writer(&socket, &command)?;
     socket.write_all(b"\n")?;
     socket.flush()?;
