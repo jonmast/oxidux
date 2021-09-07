@@ -228,9 +228,13 @@ impl Process {
     pub async fn restart(&self) {
         eprintln!("restarting");
 
-        match self.run_state().await {
+        let state = self.run_state().await;
+        match state {
             RunState::Restarting(_) | RunState::Starting => {
-                eprintln!("Ignoring restart request, process is in invalid state");
+                eprintln!(
+                    "Ignoring restart request, process is in invalid state {:?}",
+                    state
+                );
             }
             RunState::Stopped => self.start().await.unwrap_or_else(|e| eprintln!("{}", e)),
             RunState::Running(pid) | RunState::Terminating(pid) => {
