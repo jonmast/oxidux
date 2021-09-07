@@ -115,7 +115,14 @@ async fn restart_app(
 ) {
     let process = {
         let process_manager = ProcessManager::global_read().await;
-        lookup_process(&process_manager, process_name, directory).await
+
+        if process_name.is_some() {
+            lookup_process(&process_manager, process_name, directory).await
+        } else {
+            let app = process_manager
+                .find_app_for_directory(directory)
+                .ok_or_else(|| eyre!("Failed to find app to restart"));
+        }
     };
 
     let process = process.ok_or_else(|| eyre!("Failed to find app to restart"));
